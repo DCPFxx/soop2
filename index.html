@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOOP 主播列表</title>
+
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'sans-serif'] },
+      animation: {
+        'fade-in-up': 'fadeInUp .35s ease-out forwards',
+        'breathe': 'breathe 1.8s infinite ease-in-out'
+      },
+      keyframes: {
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
+        breathe: {
+          '0%,100%': { transform: 'scale(.8)', opacity: '.55' },
+          '50%': { transform: 'scale(1.15)', opacity: '1' }
+        }
+      }
+    }
+  }
+};
+</script>
+
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 10% 15%, rgba(224,242,254,1) 0%, rgba(186,230,253,.82) 46%, rgba(125,211,252,1) 100%);
+  background-attachment: fixed;
+  color: #1e293b;
+}
+.glass-panel {
+  background: rgba(255,255,255,.43);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,.65);
+}
+.glass-card {
+  background: rgba(255,255,255,.53);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.72);
+  transition: transform .25s ease, box-shadow .25s ease, background .25s ease, border-color .25s ease;
+}
+.glass-card:hover, .glass-card.selected {
+  background: rgba(255,255,255,.84);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(59,130,246,.14);
+}
+.glass-card.selected {
+  border-color: rgba(59,130,246,.75);
+  box-shadow: 0 0 0 2px rgba(59,130,246,.2), 0 12px 30px rgba(59,130,246,.14);
+}
+.carousel-wall {
+  position: relative;
+  height: 220px;
+  margin-top: 10px;
+  perspective: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.carousel-item {
+  position: absolute;
+  width: 190px;
+  height: 145px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 22px rgba(0,0,0,.14);
+  transition: all .45s ease;
+}
+.carousel-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.carousel-item.active { transform: translateZ(80px) scale(1.05); opacity: 1; z-index: 3; }
+.carousel-item.prev { transform: translateX(-48%) rotateY(20deg) scale(.86); opacity: .62; z-index: 2; }
+.carousel-item.next { transform: translateX(48%) rotateY(-20deg) scale(.86); opacity: .62; z-index: 2; }
+.carousel-item.hidden { opacity: 0; transform: scale(.55) translateZ(-80px); z-index: 1; }
+.dragging { opacity: .55 !important; }
+.drag-over { outline: 2px dashed #3b82f6; outline-offset: 3px; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+</style>
+</head>
+
+<body class="font-sans antialiased min-h-screen">
+
+<div class="max-w-[1200px] mx-auto px-4 py-8 pb-16">
+
+<header class="mb-7">
+  <h1 class="text-3xl font-bold flex items-center gap-3 text-slate-800 drop-shadow-sm">
+    <span class="material-symbols-outlined text-4xl text-blue-500">live_tv</span>
+    SOOP 主播列表
+  </h1>
+  <p class="mt-2 text-sm text-slate-500">即時查看已收藏主播的直播狀態</p>
+</header>
+
+<nav class="glass-panel flex gap-2 p-2 rounded-2xl mb-8 sticky top-4 z-20 shadow-sm">
+  <button id="tab-list" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('list')">
+    <span class="material-symbols-outlined text-[20px]">grid_view</span>主播列表
+  </button>
+  <button id="tab-request" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
+    <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
+  </button>
+  <button id="tab-admin" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('admin')">
+    <span class="material-symbols-outlined text-[20px]">settings</span>管理
+  </button>
+</nav>
+
+<div>
+
+<!-- LIST -->
+<section class="page-section hidden" id="page-list">
+
+  <div class="flex flex-wrap items-center gap-3 mb-6">
+    <button id="refreshBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm transition-all flex items-center gap-2" onclick="loadStreamers(true)">
+      <span class="material-symbols-outlined text-[20px]">sync</span>
+      更新直播狀態
+    </button>
+    <span id="lastChecked" class="text-xs text-slate-500"></span>
+  </div>
+
+  <div class="hidden text-center py-12 text-slate-500 font-medium animate-pulse" id="loading">
+    正在取得 SOOP 主播狀態...
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-6 items-start" id="split-view">
+    <div class="flex-1 w-full">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" id="cardList"></div>
+    </div>
+
+    <aside class="hidden md:block md:w-[390px] shrink-0 glass-panel rounded-3xl p-6 sticky top-24 shadow-xl" id="detailPane">
+      <div class="flex justify-between items-start mb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="detailLiveDot" class="hidden w-2.5 h-2.5 rounded-full bg-red-500 animate-breathe"></span>
+            <h2 class="text-2xl font-bold text-slate-800" id="detailTitle">主播</h2>
+          </div>
+          <p class="text-sm text-slate-500 mt-1" id="detailId"></p>
+        </div>
+        <button class="p-2 rounded-full hover:bg-black/5 text-slate-500" onclick="closeDetail()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div id="detailStatus" class="mb-5"></div>
+
+      <a class="hidden w-full bg-red-500 hover:bg-red-600 text-white text-center font-bold py-3 rounded-xl mb-3 transition-colors shadow-sm items-center justify-center gap-2" href="#" id="detailEnterStream" target="_blank" rel="noopener noreferrer">
+        <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+        進入直播
+      </a>
+
+      <a class="hidden inline-flex items-center gap-2 text-pink-600 font-semibold bg-pink-50 hover:bg-pink-100 px-4 py-2 rounded-full transition-colors mb-5" href="#" id="detailIgLink" target="_blank" rel="noopener noreferrer">
+        <span class="material-symbols-outlined text-[20px]">photo_camera</span>Instagram
+      </a>
+
+      <div>
+        <strong class="text-slate-500 font-medium block mb-2">精選圖片</strong>
+        <div class="carousel-wall" id="carousel">
+          <div class="carousel-item next"><img alt="" src="https://placehold.co/600x450/e0f2fe/334155?text=SOOP"></div>
+          <div class="carousel-item hidden"><img alt="" src="https://placehold.co/600x450/dbeafe/334155?text=STREAM"></div>
+          <div class="carousel-item prev"><img alt="" src="https://placehold.co/600x450/bae6fd/334155?text=LIVE"></div>
+          <div class="carousel-item active"><img alt="" src="https://placehold.co/600x450/eff6ff/334155?text=SOOP"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- REQUEST -->
+<section class="page-section hidden" id="page-request">
+  <div class="glass-panel max-w-2xl mx-auto rounded-3xl p-8 shadow-sm">
+    <h2 class="text-2xl font-bold mb-2 text-slate-800 flex items-center gap-2">
+      <span class="material-symbols-outlined text-blue-500">campaign</span>推薦其他主播
+    </h2>
+    <p class="text-slate-500 text-sm mb-6">如果你希望列表加入某位 SOOP 主播，可以在這裡推薦。</p>
+
+    <div class="space-y-5">
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">SOOP ID</label>
+        <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-4 py-3" id="requestId" maxlength="50" placeholder="例如：roger9527">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">主播綽號</label>
+        <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-4 py-3" id="requestNickname" maxlength="100" placeholder="例如：羅正男">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-1.5">推薦理由</label>
+        <textarea class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-4 py-3 min-h-[120px]" id="requestReason" maxlength="1000" placeholder="你為什麼推薦這位主播？（選填）"></textarea>
+      </div>
+    </div>
+
+    <div class="mt-8 flex gap-3">
+      <button id="requestSubmitBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm transition-colors flex-1" onclick="submitRequest()">送出推薦</button>
+      <button class="bg-white/60 hover:bg-white/80 text-slate-700 px-6 py-2.5 rounded-xl font-medium" onclick="showPage('list')">返回</button>
+    </div>
+  </div>
+</section>
+
+<!-- ADMIN -->
+<section class="page-section hidden" id="page-admin">
+
+  <div class="glass-panel max-w-md mx-auto rounded-3xl p-8 shadow-sm" id="loginBox">
+    <h2 class="text-2xl font-bold mb-6 text-slate-800 flex items-center gap-2">
+      <span class="material-symbols-outlined text-slate-500">admin_panel_settings</span>主播管理
+    </h2>
+    <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-4 py-3 mb-4" id="adminPassword" type="password" placeholder="管理密碼" onkeydown="if(event.key==='Enter') adminLogin()">
+    <button id="loginBtn" class="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-medium" onclick="adminLogin()">登入</button>
+  </div>
+
+  <div class="hidden space-y-8" id="adminPanel">
+
+    <div class="flex justify-between items-center">
+      <div>
+        <h2 class="text-2xl font-bold text-slate-800">管理後台</h2>
+        <p class="text-sm text-slate-500">可新增、修改、刪除與排序主播。</p>
+      </div>
+      <button class="bg-white/70 hover:bg-white px-4 py-2 rounded-xl text-sm" onclick="adminLogout()">登出</button>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6 shadow-sm">
+      <h2 class="text-xl font-bold mb-4 text-slate-800">➕ 新增主播</h2>
+      <div class="grid gap-4 md:grid-cols-3 mb-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">主播綽號</label>
+          <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm" id="newTitle">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">SOOP ID</label>
+          <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm" id="newContent">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Instagram</label>
+          <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm" id="newInstagram" placeholder="帳號或完整網址">
+        </div>
+      </div>
+      <button id="addBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-sm font-medium" onclick="addStreamer()">新增</button>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6 shadow-sm">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-slate-800">📣 主播推薦</h2>
+        <button class="text-sm bg-white/60 hover:bg-white px-3 py-2 rounded-lg" onclick="loadAdminData()">重新整理</button>
+      </div>
+      <div class="space-y-3" id="requests">載入中...</div>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6 shadow-sm">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-800">📺 主播列表</h2>
+          <p class="text-sm text-slate-500">拖曳卡片即可重新排序。</p>
+        </div>
+      </div>
+      <div class="space-y-3" id="adminStreamers">載入中...</div>
+    </div>
+
+  </div>
+</section>
+
+</div>
+</div>
+
+<div id="toast" class="fixed left-1/2 bottom-6 -translate-x-1/2 z-50 hidden max-w-[90vw] px-5 py-3 rounded-xl shadow-xl text-sm font-semibold"></div>
+
+<script>
+/*
+ * ★ Vercel → GAS API 正式連線
+ *
+ * Vercel 負責前端，Google Apps Script 負責 API。
+ * 這裡不使用 google.script.run。
+ */
+const INITIAL_PAGE = 'list';
+
+// ★ 把這裡換成你的 GAS Web App /exec 網址。
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwwNEYVx2elT6FLZla7wDr9n6upGcZlhUgBmSt3fuNWj3vlMZqkjA32rkwnaAr0O_0gYA/exec';
+
+let adminPassword = '';
+let streamers = [];
+let listLoaded = false;
+let currentSelectedId = null;
+let carouselTimer = null;
+let adminBusy = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+  activateTab(INITIAL_PAGE);
+  showPage(INITIAL_PAGE);
+});
+
+function isApiConfigured() {
+  return GAS_API_URL &&
+         GAS_API_URL.indexOf('PASTE_YOUR_GAS_WEB_APP_URL_HERE') === -1;
+}
+
+function buildApiUrl(action) {
+  const url = new URL(GAS_API_URL);
+  url.searchParams.set('action', action);
+  return url.toString();
+}
+
+async function callServer(functionName, ...args) {
+  if (!isApiConfigured()) {
+    throw new Error('尚未設定 GAS_API_URL，請把 GAS Web App /exec 網址貼到 index.html。');
+  }
+
+  const isGet = functionName === 'getAllSoopStatus' ||
+               functionName === 'getHealth';
+
+  let response;
+
+  if (isGet) {
+    response = await fetch(buildApiUrl(functionName), {
+      method: 'GET',
+      redirect: 'follow',
+      cache: 'no-store'
+    });
+  } else {
+    // ★ text/plain 是刻意的：避免 application/json 觸發 CORS preflight。
+    response = await fetch(GAS_API_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        action: functionName,
+        args: args
+      })
+    });
+  }
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error('GAS API HTTP ' + response.status);
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    throw new Error('GAS API 回傳不是有效 JSON：' + text.substring(0, 200));
+  }
+
+  if (data && data.success === false) {
+    throw new Error(data.error || 'GAS API 執行失敗');
+  }
+
+  return data;
+}
+
+function activateTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('bg-white/80', 'text-slate-900', 'shadow-sm');
+    btn.classList.add('text-slate-600');
+  });
+
+  const btn = document.getElementById('tab-' + name);
+  if (btn) {
+    btn.classList.remove('text-slate-600');
+    btn.classList.add('bg-white/80', 'text-slate-900', 'shadow-sm');
+  }
+}
+
+function showPage(name) {
+  ['list','request','admin'].forEach(page => {
+    const el = document.getElementById('page-' + page);
+    if (el) el.classList.toggle('hidden', page !== name);
+  });
+
+  activateTab(name);
+
+  if (name === 'list' && !listLoaded) {
+    listLoaded = true;
+    loadStreamers();
+  }
+
+  if (name === 'admin' && adminPassword) {
+    loadAdminData();
+  }
+}
+
+async function loadStreamers(forceRefresh = false) {
+  const loading = document.getElementById('loading');
+  const cardList = document.getElementById('cardList');
+  const btn = document.getElementById('refreshBtn');
+
+  if (!cardList) return;
+
+  loading.classList.remove('hidden');
+  btn.disabled = true;
+
+  if (forceRefresh) {
+    currentSelectedId = null;
+    closeDetail();
+  }
+
+  try {
+    if (forceRefresh) {
+      await callServer('clearSoopCache');
+    }
+
+    const response = await callServer('getAllSoopStatus');
+
+    if (!response || response.success === false) {
+      throw new Error(response && response.error ? response.error : '取得資料失敗');
+    }
+
+    streamers = Array.isArray(response.data) ? response.data : [];
+
+    const checkedAt = response.checkedAt
+      ? new Date(response.checkedAt)
+      : new Date();
+
+    document.getElementById('lastChecked').textContent =
+      '最後更新：' + checkedAt.toLocaleString('zh-TW');
+
+    renderCards();
+  } catch (error) {
+    cardList.innerHTML = `
+      <div class="col-span-full glass-panel rounded-2xl p-8 text-center text-red-600">
+        <div class="font-bold mb-2">無法取得主播資料</div>
+        <div class="text-sm">${escapeHtml(error.message || '未知錯誤')}</div>
+      </div>`;
+  } finally {
+    loading.classList.add('hidden');
+    btn.disabled = false;
+  }
+}
+
+function renderCards() {
+  const cardList = document.getElementById('cardList');
+
+  if (!streamers.length) {
+    cardList.innerHTML = `
+      <div class="col-span-full text-center py-12 text-slate-500">
+        目前沒有主播
+      </div>`;
+    return;
+  }
+
+  cardList.innerHTML = streamers.map((item, index) => {
+    const status = item.status || {};
+    const isLive = status.isLive === true;
+    const nickname = status.nickname || item.title || item.content;
+    const viewer = Number(status.viewerCount || 0);
+    const liveUrl = status.liveUrl ||
+      ('https://play.sooplive.co.kr/' + encodeURIComponent(item.content));
+
+    const selected = currentSelectedId === item.content;
+    const igUrl = normalizeInstagram(item.instagram);
+
+    return `
+      <article
+        class="glass-card rounded-2xl p-5 cursor-pointer opacity-0 animate-fade-in-up ${selected ? 'selected' : ''}"
+        style="animation-delay:${index * 45}ms"
+        id="card-${escapeAttr(item.content)}"
+        onclick="selectStreamer('${escapeAttr(item.content)}')">
+
+        <div class="flex items-start gap-4">
+          <div class="shrink-0 w-12 h-12 rounded-full bg-white/70 border border-white flex items-center justify-center shadow-sm">
+            <span class="material-symbols-outlined text-blue-500">person</span>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-lg font-bold text-slate-800 truncate">
+                ${escapeHtml(nickname)}
+              </h3>
+
+              <span class="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full ${
+                isLive
+                  ? 'bg-red-50 text-red-600 border border-red-100'
+                  : 'bg-slate-100/70 text-slate-500 border border-slate-200/70'
+              }">
+                ${isLive ? 'LIVE' : '離線'}
+              </span>
+            </div>
+
+            <div class="text-xs text-slate-500 mt-1 truncate">
+              ID：${escapeHtml(item.content)}
+            </div>
+
+            ${isLive ? `
+              <div class="mt-3 flex items-center gap-2 text-sm font-medium text-slate-600">
+                <span class="material-symbols-outlined text-[17px]">group</span>
+                ${viewer.toLocaleString()} 人觀看
+              </div>
+              ${status.title ? `
+                <div class="mt-1 text-sm text-slate-500 truncate">
+                  ${escapeHtml(status.title)}
+                </div>` : ''}
+            ` : ''}
+          </div>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+function selectStreamer(id) {
+  const item = streamers.find(x => String(x.content) === String(id));
+  if (!item) return;
+
+  if (currentSelectedId === id) {
+    closeDetail();
+    return;
+  }
+
+  currentSelectedId = id;
+
+  document.querySelectorAll('.glass-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+
+  const card = document.getElementById('card-' + id);
+  if (card) card.classList.add('selected');
+
+  const status = item.status || {};
+  const nickname = status.nickname || item.title || item.content;
+  const liveUrl = status.liveUrl ||
+    ('https://play.sooplive.co.kr/' + encodeURIComponent(item.content));
+  const igUrl = normalizeInstagram(item.instagram);
+
+  document.getElementById('detailTitle').textContent = nickname;
+  document.getElementById('detailId').textContent = 'ID：' + item.content;
+
+  const dot = document.getElementById('detailLiveDot');
+  dot.classList.toggle('hidden', !status.isLive);
+
+  const detailStatus = document.getElementById('detailStatus');
+
+  if (status.isLive) {
+    detailStatus.innerHTML = `
+      <div class="rounded-2xl bg-red-50/80 border border-red-100 p-4">
+        <div class="flex items-center gap-2 text-red-600 font-bold">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-breathe"></span>
+          正在直播
+        </div>
+        <div class="mt-2 text-sm text-slate-600">
+          ${Number(status.viewerCount || 0).toLocaleString()} 人觀看
+        </div>
+        ${status.title ? `
+          <div class="mt-1 text-sm text-slate-500">
+            ${escapeHtml(status.title)}
+          </div>` : ''}
+      </div>`;
+  } else {
+    detailStatus.innerHTML = `
+      <div class="rounded-2xl bg-slate-100/70 border border-slate-200 p-4 text-sm text-slate-500">
+        目前沒有直播
+      </div>`;
+  }
+
+  const enter = document.getElementById('detailEnterStream');
+
+  if (status.isLive) {
+    enter.href = liveUrl;
+    enter.classList.remove('hidden');
+    enter.classList.add('flex');
+  } else {
+    enter.classList.add('hidden');
+    enter.classList.remove('flex');
+  }
+
+  const ig = document.getElementById('detailIgLink');
+
+  if (igUrl) {
+    ig.href = igUrl;
+    ig.classList.remove('hidden');
+  } else {
+    ig.classList.add('hidden');
+  }
+
+  const pane = document.getElementById('detailPane');
+  pane.classList.remove('hidden');
+  startCarousel();
+}
+
+function closeDetail() {
+  currentSelectedId = null;
+
+  document.querySelectorAll('.glass-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+
+  const pane = document.getElementById('detailPane');
+
+  if (pane) {
+    pane.classList.add('hidden');
+  }
+
+  stopCarousel();
+}
+
+function startCarousel() {
+  stopCarousel();
+
+  carouselTimer = setInterval(() => {
+    const wall = document.getElementById('carousel');
+    if (!wall) return;
+
+    const items = Array.from(wall.querySelectorAll('.carousel-item'));
+    if (!items.length) return;
+
+    const active = items.findIndex(x => x.classList.contains('active'));
+    const next = (active + 1) % items.length;
+
+    items.forEach(x => x.classList.remove('active','prev','next','hidden'));
+
+    items.forEach((item, index) => {
+      if (index === next) item.classList.add('active');
+      else if (index === (next - 1 + items.length) % items.length) item.classList.add('prev');
+      else if (index === (next + 1) % items.length) item.classList.add('next');
+      else item.classList.add('hidden');
+    });
+  }, 3000);
+}
+
+function stopCarousel() {
+  if (carouselTimer) {
+    clearInterval(carouselTimer);
+    carouselTimer = null;
+  }
+}
+
+async function submitRequest() {
+  const btn = document.getElementById('requestSubmitBtn');
+  const soopId = document.getElementById('requestId').value.trim();
+  const nickname = document.getElementById('requestNickname').value.trim();
+  const reason = document.getElementById('requestReason').value.trim();
+
+  if (!soopId || !nickname) {
+    showToast('請填寫 SOOP ID 與主播綽號', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+
+  try {
+    const response = await callServer(
+      'submitRequest',
+      soopId,
+      nickname,
+      reason
+    );
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '送出失敗');
+    }
+
+    document.getElementById('requestId').value = '';
+    document.getElementById('requestNickname').value = '';
+    document.getElementById('requestReason').value = '';
+
+    showToast('推薦已送出，感謝你的推薦！', 'success');
+  } catch (error) {
+    showToast(error.message || '推薦送出失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function adminLogin() {
+  const password = document.getElementById('adminPassword').value;
+
+  if (!password) {
+    showToast('請輸入管理密碼', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+
+  try {
+    const valid = await callServer('checkPassword', password);
+
+    if (!valid) {
+      throw new Error('管理密碼錯誤');
+    }
+
+    adminPassword = password;
+
+    document.getElementById('loginBox').classList.add('hidden');
+    document.getElementById('adminPanel').classList.remove('hidden');
+
+    await loadAdminData();
+    showToast('管理員登入成功', 'success');
+  } catch (error) {
+    showToast(error.message || '登入失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function adminLogout() {
+  adminPassword = '';
+  document.getElementById('adminPassword').value = '';
+  document.getElementById('adminPanel').classList.add('hidden');
+  document.getElementById('loginBox').classList.remove('hidden');
+  showToast('已登出', 'success');
+}
+
+async function loadAdminData() {
+  if (!adminPassword) return;
+
+  try {
+    const response = await callServer('getAdminData', adminPassword);
+
+    if (!response || response.success === false) {
+      throw new Error(response && response.error ? response.error : '取得管理資料失敗');
+    }
+
+    renderAdminRequests(response.requests || []);
+    renderAdminStreamers(response.streamers || []);
+  } catch (error) {
+    if (/密碼|登入/.test(error.message || '')) {
+      adminLogout();
+    } else {
+      showToast(error.message || '管理資料載入失敗', 'error');
+    }
+  }
+}
+
+function renderAdminRequests(requests) {
+  const box = document.getElementById('requests');
+
+  if (!requests.length) {
+    box.innerHTML = '<div class="text-sm text-slate-500 py-4">目前沒有推薦資料。</div>';
+    return;
+  }
+
+  box.innerHTML = requests.map(req => {
+    const statusClass =
+      req.status === '已加入'
+        ? 'bg-green-50 text-green-700'
+        : req.status === '拒絕'
+          ? 'bg-slate-100 text-slate-500'
+          : 'bg-amber-50 text-amber-700';
+
+    return `
+      <div class="bg-white/50 rounded-2xl p-4 border border-white/60">
+        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+          <div class="min-w-0">
+            <div class="font-bold text-slate-800">${escapeHtml(req.nickname)}</div>
+            <div class="text-xs text-slate-500 mt-1">
+              ID：${escapeHtml(req.soopId)} · ${escapeHtml(req.time)}
+            </div>
+            ${req.reason ? `
+              <div class="text-sm text-slate-600 mt-2 whitespace-pre-wrap">
+                ${escapeHtml(req.reason)}
+              </div>` : ''}
+          </div>
+
+          <span class="shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${statusClass}">
+            ${escapeHtml(req.status)}
+          </span>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mt-4">
+          <button class="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white hover:bg-blue-700"
+                  onclick="approveRequest(${Number(req.row)})">
+            加入主播列表
+          </button>
+          <button class="px-3 py-1.5 rounded-lg text-xs bg-white hover:bg-slate-50"
+                  onclick="changeRequestStatus(${Number(req.row)}, '待處理')">
+            待處理
+          </button>
+          <button class="px-3 py-1.5 rounded-lg text-xs bg-white hover:bg-slate-50"
+                  onclick="changeRequestStatus(${Number(req.row)}, '拒絕')">
+            拒絕
+          </button>
+          <button class="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 hover:bg-red-100"
+                  onclick="deleteRequest(${Number(req.row)})">
+            刪除
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderAdminStreamers(items) {
+  const box = document.getElementById('adminStreamers');
+
+  if (!items.length) {
+    box.innerHTML = '<div class="text-sm text-slate-500 py-4">目前沒有主播。</div>';
+    return;
+  }
+
+  box.innerHTML = items.map((item, index) => `
+    <div class="bg-white/50 rounded-2xl p-4 border border-white/60 flex flex-col lg:flex-row lg:items-center gap-3"
+         draggable="true"
+         data-streamer-id="${escapeAttr(item.id)}"
+         ondragstart="dragStart(event)"
+         ondragover="dragOver(event)"
+         ondrop="dropStreamer(event)"
+         ondragend="dragEnd(event)">
+
+      <div class="cursor-grab text-slate-400">
+        <span class="material-symbols-outlined">drag_indicator</span>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-slate-800">${escapeHtml(item.title || item.content)}</div>
+        <div class="text-xs text-slate-500">ID：${escapeHtml(item.content)}</div>
+      </div>
+
+      <button class="px-3 py-2 rounded-lg text-xs bg-white hover:bg-slate-50"
+              onclick="editStreamer('${escapeAttr(item.id)}')">
+        修改
+      </button>
+
+      <button class="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 hover:bg-red-100"
+              onclick="deleteStreamer('${escapeAttr(item.id)}')">
+        刪除
+      </button>
+    </div>
+  `).join('');
+}
+
+function editStreamer(id) {
+  const item = streamers.find(x => String(x.id) === String(id));
+
+  // 管理資料可能不是目前直播資料，所以從 DOM 管理列表資料不一定在 streamers。
+  // 改由重新取得管理資料後找不到時，再提示。
+  if (!item) {
+    editStreamerFromAdminData(id);
+    return;
+  }
+
+  const title = prompt('主播綽號：', item.title || '');
+  if (title === null) return;
+
+  const soopId = prompt('SOOP ID：', item.content || '');
+  if (soopId === null) return;
+
+  const instagram = prompt('Instagram（可留白）：', item.instagram || '');
+  if (instagram === null) return;
+
+  updateStreamer(id, title, soopId, instagram);
+}
+
+async function editStreamerFromAdminData(id) {
+  try {
+    const response = await callServer('getAdminData', adminPassword);
+    const item = (response.streamers || []).find(x => String(x.id) === String(id));
+
+    if (!item) {
+      showToast('找不到主播資料', 'error');
+      return;
+    }
+
+    const title = prompt('主播綽號：', item.title || '');
+    if (title === null) return;
+
+    const soopId = prompt('SOOP ID：', item.content || '');
+    if (soopId === null) return;
+
+    const instagram = prompt('Instagram（可留白）：', item.instagram || '');
+    if (instagram === null) return;
+
+    await updateStreamer(id, title, soopId, instagram);
+  } catch (error) {
+    showToast(error.message || '讀取主播資料失敗', 'error');
+  }
+}
+
+async function updateStreamer(id, title, soopId, instagram) {
+  try {
+    const response = await callServer(
+      'updateStreamer',
+      id,
+      title,
+      soopId,
+      instagram,
+      adminPassword
+    );
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '更新失敗');
+    }
+
+    await loadAdminData();
+    listLoaded = false;
+
+    showToast('主播資料已更新', 'success');
+  } catch (error) {
+    showToast(error.message || '更新失敗', 'error');
+  }
+}
+
+async function addStreamer() {
+  const btn = document.getElementById('addBtn');
+  const title = document.getElementById('newTitle').value.trim();
+  const soopId = document.getElementById('newContent').value.trim();
+  const instagram = document.getElementById('newInstagram').value.trim();
+
+  if (!title || !soopId) {
+    showToast('請填寫主播綽號與 SOOP ID', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+
+  try {
+    const response = await callServer(
+      'addStreamer',
+      title,
+      soopId,
+      instagram,
+      adminPassword
+    );
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '新增失敗');
+    }
+
+    document.getElementById('newTitle').value = '';
+    document.getElementById('newContent').value = '';
+    document.getElementById('newInstagram').value = '';
+
+    await loadAdminData();
+    listLoaded = false;
+
+    showToast('主播新增成功', 'success');
+  } catch (error) {
+    showToast(error.message || '新增失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteStreamer(id) {
+  if (!confirm('確定要刪除這位主播嗎？')) return;
+
+  try {
+    const response = await callServer(
+      'deleteStreamer',
+      id,
+      adminPassword
+    );
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '刪除失敗');
+    }
+
+    await loadAdminData();
+    listLoaded = false;
+    showToast('主播已刪除', 'success');
+  } catch (error) {
+    showToast(error.message || '刪除失敗', 'error');
+  }
+}
+
+async function approveRequest(row) {
+  try {
+    const response = await callServer(
+      'approveRequest',
+      row,
+      adminPassword
+    );
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '加入失敗');
+    }
+
+    await loadAdminData();
+    listLoaded = false;
+    showToast('推薦主播已加入列表', 'success');
+  } catch (error) {
+    showToast(error.message || '加入失敗', 'error');
+  }
+}
+
+async function changeRequestStatus(row, status) {
+  try {
+    await callServer(
+      'updateRequestStatus',
+      row,
+      status,
+      adminPassword
+    );
+
+    await loadAdminData();
+    showToast('推薦狀態已更新', 'success');
+  } catch (error) {
+    showToast(error.message || '狀態更新失敗', 'error');
+  }
+}
+
+async function deleteRequest(row) {
+  if (!confirm('確定刪除這筆推薦嗎？')) return;
+
+  try {
+    await callServer(
+      'deleteRequest',
+      row,
+      adminPassword
+    );
+
+    await loadAdminData();
+    showToast('推薦資料已刪除', 'success');
+  } catch (error) {
+    showToast(error.message || '刪除失敗', 'error');
+  }
+}
+
+let draggedId = null;
+
+function dragStart(event) {
+  const el = event.currentTarget;
+  draggedId = el.dataset.streamerId;
+  el.classList.add('dragging');
+
+  try {
+    event.dataTransfer.setData('text/plain', draggedId);
+  } catch (_) {}
+}
+
+function dragOver(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('drag-over');
+}
+
+function dragEnd(event) {
+  event.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+async function dropStreamer(event) {
+  event.preventDefault();
+
+  const target = event.currentTarget;
+  target.classList.remove('drag-over');
+
+  const targetId = target.dataset.streamerId;
+
+  if (!draggedId || !targetId || draggedId === targetId) {
+    draggedId = null;
+    return;
+  }
+
+  const box = document.getElementById('adminStreamers');
+  const nodes = Array.from(box.querySelectorAll('[data-streamer-id]'));
+
+  const from = nodes.findIndex(n => n.dataset.streamerId === draggedId);
+  const to = nodes.findIndex(n => n.dataset.streamerId === targetId);
+
+  if (from === -1 || to === -1) {
+    draggedId = null;
+    return;
+  }
+
+  const node = nodes[from];
+
+  if (from < to) {
+    target.after(node);
+  } else {
+    target.before(node);
+  }
+
+  const orderedIds = Array.from(
+    box.querySelectorAll('[data-streamer-id]')
+  ).map(n => n.dataset.streamerId);
+
+  draggedId = null;
+
+  try {
+    await callServer(
+      'updateStreamerOrder',
+      orderedIds.map((id, index) => ({
+        id: id,
+        order: index + 1
+      })),
+      adminPassword
+    );
+
+    showToast('排序已儲存', 'success');
+  } catch (error) {
+    showToast(error.message || '排序儲存失敗', 'error');
+    await loadAdminData();
+  }
+}
+
+function normalizeInstagram(value) {
+  if (!value) return '';
+
+  const str = String(value).trim();
+
+  if (!str) return '';
+
+  if (/^https?:\/\//i.test(str)) {
+    return str;
+  }
+
+  return 'https://instagram.com/' + str.replace(/^@/, '');
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+
+  toast.textContent = message;
+  toast.className =
+    'fixed left-1/2 bottom-6 -translate-x-1/2 z-50 max-w-[90vw] px-5 py-3 rounded-xl shadow-xl text-sm font-semibold ' +
+    (type === 'error'
+      ? 'bg-red-600 text-white'
+      : 'bg-slate-900 text-white');
+
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => {
+    toast.classList.add('hidden');
+  }, 3000);
+}
+</script>
+
+</body>
+</html>
