@@ -471,7 +471,7 @@ function renderCards() {
   cardList.innerHTML = streamers.map((item, index) => {
     const status = item.status || {};
     const isLive = status.isLive === true;
-    const nickname = status.nickname || item.title || item.content;
+    const nickname = item.title || status.nickname || item.content;
     const viewer = Number(status.viewerCount || 0);
     const liveUrl = status.liveUrl ||
       ('https://play.sooplive.co.kr/' + encodeURIComponent(item.content));
@@ -550,7 +550,7 @@ function selectStreamer(id) {
   if (card) card.classList.add('selected');
 
   const status = item.status || {};
-  const nickname = status.nickname || item.title || item.content;
+  const nickname = item.title || status.nickname || item.content;
   const liveUrl = status.liveUrl ||
     ('https://play.sooplive.co.kr/' + encodeURIComponent(item.content));
   const igUrl = normalizeInstagram(item.instagram);
