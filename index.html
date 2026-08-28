@@ -249,6 +249,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
           <label class="block text-sm font-semibold text-slate-700 mb-1">Instagram</label>
           <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm" id="newInstagram" placeholder="帳號或完整網址">
         </div>
+        <div class="md:col-span-3">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">圖片牆網址（可貼多張，用逗號或換行分隔，最多 8 張）</label>
+          <textarea class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm" id="newImages" rows="2" placeholder="https://... , https://..."></textarea>
+        </div>
       </div>
       <button id="addBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-sm font-medium" onclick="addStreamer()">新增</button>
     </div>
@@ -615,14 +619,24 @@ function selectStreamer(id) {
 function updateCarouselImages(item, status, nickname) {
   const images = [];
 
-  // 頭像圖：來自主播的 SOOP 主頁面，每位主播都會有。
-  if (status.avatarUrl) {
-    images.push(status.avatarUrl);
+  // 最優先：管理後台手動填入的圖片牆網址（例如主播 Instagram 貼文圖）。
+  if (Array.isArray(item.images) && item.images.length) {
+    item.images.forEach(function(url) {
+      if (url) images.push(url);
+    });
   }
 
-  // 直播縮圖：只有開台中才存在。
-  if (status.isLive && status.thumbnailUrl) {
-    images.push(status.thumbnailUrl);
+  // 沒有手動填圖時，退回自動抓取的頭像 / 直播縮圖。
+  if (!images.length) {
+    // 頭像圖：來自主播的 SOOP 主頁面，每位主播都會有。
+    if (status.avatarUrl) {
+      images.push(status.avatarUrl);
+    }
+
+    // 直播縮圖：只有開台中才存在。
+    if (status.isLive && status.thumbnailUrl) {
+      images.push(status.thumbnailUrl);
+    }
   }
 
   if (!images.length) {
@@ -905,7 +919,13 @@ function editStreamer(id) {
   const instagram = prompt('Instagram（可留白）：', item.instagram || '');
   if (instagram === null) return;
 
-  updateStreamer(id, title, soopId, instagram);
+  const images = prompt(
+    '圖片牆網址（可留白，多張用逗號分隔）：',
+    (item.images || []).join(', ')
+  );
+  if (images === null) return;
+
+  updateStreamer(id, title, soopId, instagram, images);
 }
 
 async function editStreamerFromAdminData(id) {
@@ -927,13 +947,19 @@ async function editStreamerFromAdminData(id) {
     const instagram = prompt('Instagram（可留白）：', item.instagram || '');
     if (instagram === null) return;
 
-    await updateStreamer(id, title, soopId, instagram);
+    const images = prompt(
+      '圖片牆網址（可留白，多張用逗號分隔）：',
+      (item.images || []).join(', ')
+    );
+    if (images === null) return;
+
+    await updateStreamer(id, title, soopId, instagram, images);
   } catch (error) {
     showToast(error.message || '讀取主播資料失敗', 'error');
   }
 }
 
-async function updateStreamer(id, title, soopId, instagram) {
+async function updateStreamer(id, title, soopId, instagram, images) {
   try {
     const response = await callServer(
       'updateStreamer',
@@ -941,6 +967,7 @@ async function updateStreamer(id, title, soopId, instagram) {
       title,
       soopId,
       instagram,
+      images,
       adminPassword
     );
 
@@ -962,6 +989,7 @@ async function addStreamer() {
   const title = document.getElementById('newTitle').value.trim();
   const soopId = document.getElementById('newContent').value.trim();
   const instagram = document.getElementById('newInstagram').value.trim();
+  const images = document.getElementById('newImages').value.trim();
 
   if (!title || !soopId) {
     showToast('請填寫主播綽號與 SOOP ID', 'error');
@@ -976,6 +1004,7 @@ async function addStreamer() {
       title,
       soopId,
       instagram,
+      images,
       adminPassword
     );
 
@@ -986,6 +1015,7 @@ async function addStreamer() {
     document.getElementById('newTitle').value = '';
     document.getElementById('newContent').value = '';
     document.getElementById('newInstagram').value = '';
+    document.getElementById('newImages').value = '';
 
     await loadAdminData();
     listLoaded = false;
