@@ -93,6 +93,85 @@ body {
 .carousel-item.prev { transform: translateX(-48%) rotateY(20deg) scale(.86); opacity: .62; z-index: 2; }
 .carousel-item.next { transform: translateX(48%) rotateY(-20deg) scale(.86); opacity: .62; z-index: 2; }
 .carousel-item.hidden { opacity: 0; transform: scale(.55) translateZ(-80px); z-index: 1; }
+.carousel-item img { cursor: zoom-in; }
+
+.carousel-wrap { position: relative; }
+.carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.85);
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+  color: #334155;
+  transition: background .15s ease, transform .15s ease;
+}
+.carousel-nav:hover { background: #fff; transform: translateY(-50%) scale(1.06); }
+.carousel-nav-prev { left: 2px; }
+.carousel-nav-next { right: 2px; }
+.carousel-nav.hidden { display: none; }
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15,23,42,.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.lightbox.hidden { display: none; }
+.lightbox img {
+  max-width: min(92vw, 1100px);
+  max-height: 88vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  object-fit: contain;
+}
+.lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.lightbox-close:hover { background: rgba(255,255,255,.28); }
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.lightbox-nav:hover { background: rgba(255,255,255,.28); }
+.lightbox-nav-prev { left: 16px; }
+.lightbox-nav-next { right: 16px; }
+.lightbox-nav.hidden { display: none; }
 .dragging { opacity: .55 !important; }
 .drag-over { outline: 2px dashed #3b82f6; outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
@@ -172,11 +251,14 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
       <div>
         <strong class="text-slate-500 font-medium block mb-2">精選圖片</strong>
-        <div class="carousel-wall" id="carousel">
-          <div class="carousel-item next"><img alt=""></div>
-          <div class="carousel-item hidden"><img alt=""></div>
-          <div class="carousel-item prev"><img alt=""></div>
-          <div class="carousel-item active"><img alt=""></div>
+        <div class="carousel-wrap">
+          <div class="carousel-wall" id="carousel"></div>
+          <button type="button" class="carousel-nav carousel-nav-prev" id="carouselPrevBtn" onclick="goCarousel(-1)" aria-label="上一張">
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <button type="button" class="carousel-nav carousel-nav-next" id="carouselNextBtn" onclick="goCarousel(1)" aria-label="下一張">
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
         </div>
       </div>
     </aside>
@@ -283,6 +365,19 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
 <div id="toast" class="fixed left-1/2 bottom-6 -translate-x-1/2 z-50 hidden max-w-[90vw] px-5 py-3 rounded-xl shadow-xl text-sm font-semibold"></div>
 
+<div id="lightbox" class="lightbox hidden" onclick="closeLightbox(event)">
+  <button type="button" class="lightbox-close" onclick="closeLightbox(event)" aria-label="關閉">
+    <span class="material-symbols-outlined">close</span>
+  </button>
+  <button type="button" class="lightbox-nav lightbox-nav-prev" onclick="lightboxGo(-1, event)" aria-label="上一張">
+    <span class="material-symbols-outlined">chevron_left</span>
+  </button>
+  <img id="lightboxImg" src="" alt="">
+  <button type="button" class="lightbox-nav lightbox-nav-next" onclick="lightboxGo(1, event)" aria-label="下一張">
+    <span class="material-symbols-outlined">chevron_right</span>
+  </button>
+</div>
+
 <script>
 /*
  * ★ Vercel → GAS API 正式連線
@@ -300,6 +395,9 @@ let streamers = [];
 let listLoaded = false;
 let currentSelectedId = null;
 let carouselTimer = null;
+let carouselImages = [];
+let carouselActiveIndex = 0;
+let lightboxIndex = 0;
 let adminBusy = false;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -643,19 +741,83 @@ function updateCarouselImages(item, status, nickname) {
     images.push('https://placehold.co/600x450/e0f2fe/334155?text=SOOP');
   }
 
+  carouselImages = images;
+  carouselActiveIndex = 0;
+
   const wall = document.getElementById('carousel');
   if (!wall) return;
 
-  const imgs = Array.from(wall.querySelectorAll('.carousel-item img'));
+  wall.innerHTML = '';
 
-  imgs.forEach((img, index) => {
-    img.src = images[index % images.length];
+  images.forEach(function(url, index) {
+    const wrap = document.createElement('div');
+    wrap.className = 'carousel-item';
+
+    const img = document.createElement('img');
+    img.src = url;
     img.alt = nickname || item.content;
     img.onerror = function() {
       img.onerror = null;
       img.src = 'https://placehold.co/600x450/e0f2fe/334155?text=' +
         encodeURIComponent(item.content || 'SOOP');
     };
+    // 點圖放大成原本尺寸。
+    img.onclick = function() {
+      openLightbox(index);
+    };
+
+    wrap.appendChild(img);
+    wall.appendChild(wrap);
+  });
+
+  applyCarouselPositions(
+    Array.from(wall.querySelectorAll('.carousel-item')),
+    0
+  );
+
+  // 只有 1 張圖時，左右切換按鈕沒有意義，隱藏起來。
+  const prevBtn = document.getElementById('carouselPrevBtn');
+  const nextBtn = document.getElementById('carouselNextBtn');
+  if (prevBtn) prevBtn.classList.toggle('hidden', images.length <= 1);
+  if (nextBtn) nextBtn.classList.toggle('hidden', images.length <= 1);
+}
+
+// 手動點左右箭頭切換上一張／下一張，並重新起算自動輪播的
+// 3 秒倒數，避免使用者才剛手動切完，下一秒又被自動輪播蓋掉。
+function goCarousel(direction) {
+  const wall = document.getElementById('carousel');
+  if (!wall) return;
+
+  const items = Array.from(wall.querySelectorAll('.carousel-item'));
+  if (items.length <= 1) return;
+
+  carouselActiveIndex =
+    (carouselActiveIndex + direction + items.length) % items.length;
+
+  applyCarouselPositions(items, carouselActiveIndex);
+  startCarousel();
+}
+
+// 依「哪一張是主圖」把 active/prev/next/hidden 這幾個定位
+// class 分配給圖片牆裡的每一格，張數不限（1 張到 8 張都適用），
+// 新增圖片、輪播 tick 都共用同一套邏輯，行為才會一致。
+function applyCarouselPositions(items, activeIndex) {
+  const len = items.length;
+
+  items.forEach(function(el, index) {
+    el.classList.remove('active', 'prev', 'next', 'hidden');
+
+    if (len === 1) {
+      el.classList.add('active');
+    } else if (index === activeIndex) {
+      el.classList.add('active');
+    } else if (index === (activeIndex - 1 + len) % len) {
+      el.classList.add('prev');
+    } else if (index === (activeIndex + 1) % len) {
+      el.classList.add('next');
+    } else {
+      el.classList.add('hidden');
+    }
   });
 }
 
@@ -673,6 +835,9 @@ function closeDetail() {
   }
 
   stopCarousel();
+
+  const box = document.getElementById('lightbox');
+  if (box) box.classList.add('hidden');
 }
 
 function startCarousel() {
@@ -683,19 +848,13 @@ function startCarousel() {
     if (!wall) return;
 
     const items = Array.from(wall.querySelectorAll('.carousel-item'));
-    if (!items.length) return;
+    if (items.length <= 1) return;
 
     const active = items.findIndex(x => x.classList.contains('active'));
     const next = (active + 1) % items.length;
 
-    items.forEach(x => x.classList.remove('active','prev','next','hidden'));
-
-    items.forEach((item, index) => {
-      if (index === next) item.classList.add('active');
-      else if (index === (next - 1 + items.length) % items.length) item.classList.add('prev');
-      else if (index === (next + 1) % items.length) item.classList.add('next');
-      else item.classList.add('hidden');
-    });
+    carouselActiveIndex = next;
+    applyCarouselPositions(items, next);
   }, 3000);
 }
 
@@ -705,6 +864,78 @@ function stopCarousel() {
     carouselTimer = null;
   }
 }
+
+/*************************************************
+ * 圖片放大燈箱
+ *************************************************/
+
+function openLightbox(index) {
+  if (!carouselImages.length) return;
+
+  lightboxIndex = ((index % carouselImages.length) + carouselImages.length) %
+    carouselImages.length;
+
+  renderLightbox();
+
+  const box = document.getElementById('lightbox');
+  if (box) box.classList.remove('hidden');
+
+  // 開燈箱時暫停背景輪播，避免使用者放大看圖時卡片還在轉。
+  stopCarousel();
+}
+
+function renderLightbox() {
+  const img = document.getElementById('lightboxImg');
+  if (!img || !carouselImages.length) return;
+
+  img.src = carouselImages[lightboxIndex];
+  img.onerror = function() {
+    img.onerror = null;
+    img.src = 'https://placehold.co/900x900/e0f2fe/334155?text=SOOP';
+  };
+
+  const multi = carouselImages.length > 1;
+  document.querySelectorAll('.lightbox-nav').forEach(btn => {
+    btn.classList.toggle('hidden', !multi);
+  });
+}
+
+function lightboxGo(direction, event) {
+  if (event) event.stopPropagation();
+  if (!carouselImages.length) return;
+
+  lightboxIndex = (lightboxIndex + direction + carouselImages.length) %
+    carouselImages.length;
+
+  renderLightbox();
+}
+
+function closeLightbox(event) {
+  // 點到圖片本身或按鈕時，click 事件會冒泡到外層遮罩，
+  // 這裡只有點在遮罩空白處或關閉鈕才真的關閉。
+  if (event && event.target && event.target.id === 'lightboxImg') return;
+
+  const box = document.getElementById('lightbox');
+  if (box) box.classList.add('hidden');
+
+  // 詳細面板還開著的話，恢復輪播。
+  if (currentSelectedId !== null) {
+    startCarousel();
+  }
+}
+
+document.addEventListener('keydown', (event) => {
+  const box = document.getElementById('lightbox');
+  if (!box || box.classList.contains('hidden')) return;
+
+  if (event.key === 'Escape') {
+    closeLightbox();
+  } else if (event.key === 'ArrowLeft') {
+    lightboxGo(-1);
+  } else if (event.key === 'ArrowRight') {
+    lightboxGo(1);
+  }
+});
 
 async function submitRequest() {
   const btn = document.getElementById('requestSubmitBtn');
@@ -978,7 +1209,7 @@ async function updateStreamer(id, title, soopId, instagram, images) {
     await loadAdminData();
     listLoaded = false;
 
-    showToast('主播資料已更新', 'success');
+    showToast(response.message || '主播資料已更新', 'success');
   } catch (error) {
     showToast(error.message || '更新失敗', 'error');
   }
@@ -1020,7 +1251,7 @@ async function addStreamer() {
     await loadAdminData();
     listLoaded = false;
 
-    showToast('主播新增成功', 'success');
+    showToast(response.message || '主播新增成功', 'success');
   } catch (error) {
     showToast(error.message || '新增失敗', 'error');
   } finally {
