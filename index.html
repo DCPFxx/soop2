@@ -194,6 +194,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   <button id="tab-list" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('list')">
     <span class="material-symbols-outlined text-[20px]">grid_view</span>主播列表
   </button>
+  <button id="tab-twitch" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('twitch')">
+    <span class="material-symbols-outlined text-[20px]">podcasts</span>Twitch
+  </button>
   <button id="tab-request" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
     <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
   </button>
@@ -263,6 +266,25 @@ button:disabled { opacity: .55; cursor: not-allowed; }
       </div>
     </aside>
   </div>
+</section>
+
+<!-- TWITCH -->
+<section class="page-section hidden" id="page-twitch">
+
+  <div class="flex flex-wrap items-center gap-3 mb-6">
+    <button id="twitchRefreshBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm transition-all flex items-center gap-2" onclick="loadTwitchStreamers(true)">
+      <span class="material-symbols-outlined text-[20px]">sync</span>
+      更新直播狀態
+    </button>
+    <span id="twitchLastChecked" class="text-xs text-slate-500"></span>
+  </div>
+
+  <div class="hidden text-center py-12 text-slate-500 font-medium animate-pulse" id="twitchLoading">
+    正在取得 Twitch 主播狀態...
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" id="twitchCardList"></div>
+
 </section>
 
 <!-- REQUEST -->
@@ -357,6 +379,31 @@ button:disabled { opacity: .55; cursor: not-allowed; }
       <div class="space-y-3" id="adminStreamers">載入中...</div>
     </div>
 
+    <div class="glass-panel rounded-3xl p-6 shadow-sm">
+      <h2 class="text-xl font-bold mb-4 text-slate-800">➕ 新增 Twitch 追蹤主播</h2>
+      <div class="grid gap-4 md:grid-cols-3 mb-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">暱稱</label>
+          <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-purple-500 rounded-xl px-3 py-2 text-sm" id="newTwitchTitle">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Twitch 帳號（login，或直接貼 twitch.tv 網址）</label>
+          <input class="w-full bg-white/60 border-0 focus:ring-2 focus:ring-purple-500 rounded-xl px-3 py-2 text-sm" id="newTwitchLogin" placeholder="例如 xqc 或 https://twitch.tv/xqc">
+        </div>
+      </div>
+      <button id="addTwitchBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-xl text-sm font-medium" onclick="addTwitchStreamer()">新增</button>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6 shadow-sm">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-800">🟣 Twitch 追蹤名單</h2>
+          <p class="text-sm text-slate-500">拖曳卡片即可重新排序。</p>
+        </div>
+      </div>
+      <div class="space-y-3" id="adminTwitchStreamers">載入中...</div>
+    </div>
+
   </div>
 </section>
 
@@ -406,6 +453,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwwNEYVx2elT6FLZla7
 let adminPassword = '';
 let streamers = [];
 let listLoaded = false;
+let twitchStreamers = [];
+let twitchListLoaded = false;
 let currentSelectedId = null;
 let carouselTimer = null;
 let carouselImages = [];
@@ -435,6 +484,7 @@ async function callServer(functionName, ...args) {
   }
 
   const isGet = functionName === 'getAllSoopStatus' ||
+               functionName === 'getAllTwitchStatus' ||
                functionName === 'getHealth';
 
   let response;
@@ -496,7 +546,7 @@ function activateTab(name) {
 }
 
 function showPage(name) {
-  ['list','request','admin'].forEach(page => {
+  ['list','twitch','request','admin'].forEach(page => {
     const el = document.getElementById('page-' + page);
     if (el) el.classList.toggle('hidden', page !== name);
   });
@@ -506,6 +556,11 @@ function showPage(name) {
   if (name === 'list' && !listLoaded) {
     listLoaded = true;
     loadStreamers();
+  }
+
+  if (name === 'twitch' && !twitchListLoaded) {
+    twitchListLoaded = true;
+    loadTwitchStreamers();
   }
 
   if (name === 'admin' && adminPassword) {
@@ -634,6 +689,128 @@ function renderCards() {
               <div class="mt-3 flex items-center gap-2 text-sm font-medium text-slate-600">
                 <span class="material-symbols-outlined text-[17px]">group</span>
                 ${viewer.toLocaleString()} 人觀看
+              </div>
+              ${status.title ? `
+                <div class="mt-1 text-sm text-slate-500 truncate">
+                  ${escapeHtml(status.title)}
+                </div>` : ''}
+            ` : ''}
+          </div>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+/*************************************************
+ * Twitch 分頁
+ *************************************************/
+
+async function loadTwitchStreamers(forceRefresh = false) {
+  const loading = document.getElementById('twitchLoading');
+  const cardList = document.getElementById('twitchCardList');
+  const btn = document.getElementById('twitchRefreshBtn');
+
+  if (!cardList) return;
+
+  loading.classList.remove('hidden');
+  btn.disabled = true;
+
+  try {
+    if (forceRefresh) {
+      await callServer('clearTwitchCache');
+    }
+
+    const response = await callServer('getAllTwitchStatus');
+
+    if (!response || response.success === false) {
+      throw new Error(response && response.error ? response.error : '取得資料失敗');
+    }
+
+    const rawList = Array.isArray(response.data) ? response.data : [];
+
+    twitchStreamers = rawList.slice().sort((a, b) => {
+      const aLive = a.status && a.status.isLive ? 1 : 0;
+      const bLive = b.status && b.status.isLive ? 1 : 0;
+
+      if (aLive !== bLive) {
+        return bLive - aLive;
+      }
+
+      return (Number(a.order) || 0) - (Number(b.order) || 0);
+    });
+
+    const checkedAt = response.checkedAt
+      ? new Date(response.checkedAt)
+      : new Date();
+
+    document.getElementById('twitchLastChecked').textContent =
+      '最後更新：' + checkedAt.toLocaleString('zh-TW') +
+      (response.error ? '（部分資料取得失敗：' + response.error + '）' : '');
+
+    renderTwitchCards();
+  } catch (error) {
+    cardList.innerHTML = `
+      <div class="col-span-full glass-panel rounded-2xl p-8 text-center text-red-600">
+        <div class="font-bold mb-2">無法取得 Twitch 主播資料</div>
+        <div class="text-sm">${escapeHtml(error.message || '未知錯誤')}</div>
+      </div>`;
+  } finally {
+    loading.classList.add('hidden');
+    btn.disabled = false;
+  }
+}
+
+function renderTwitchCards() {
+  const cardList = document.getElementById('twitchCardList');
+
+  if (!twitchStreamers.length) {
+    cardList.innerHTML = `
+      <div class="col-span-full text-center py-12 text-slate-500">
+        目前沒有追蹤的 Twitch 主播
+      </div>`;
+    return;
+  }
+
+  cardList.innerHTML = twitchStreamers.map((item, index) => {
+    const status = item.status || {};
+    const isLive = status.isLive === true;
+    const nickname = item.title || status.displayName || item.login;
+    const viewer = Number(status.viewerCount || 0);
+    const liveUrl = status.liveUrl ||
+      ('https://www.twitch.tv/' + encodeURIComponent(item.login));
+
+    return `
+      <article
+        class="glass-card rounded-2xl p-5 cursor-pointer opacity-0 animate-fade-in-up"
+        style="animation-delay:${index * 45}ms"
+        onclick="window.open('${escapeAttr(liveUrl)}', '_blank', 'noopener,noreferrer')">
+
+        <div class="flex items-start gap-4">
+          <div class="shrink-0 w-12 h-12 rounded-full bg-white/70 border border-white shadow-sm relative overflow-hidden">
+            <img
+              src="${escapeAttr(status.avatarUrl || '')}"
+              alt=""
+              class="w-full h-full object-cover"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <span class="material-symbols-outlined text-purple-500 absolute inset-0 items-center justify-center" style="display:none;">person</span>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="font-bold text-slate-800 truncate">${escapeHtml(nickname)}</h3>
+              ${isLive
+                ? `<span class="shrink-0 flex items-center gap-1 text-xs font-bold text-red-600">
+                     <span class="w-2 h-2 rounded-full bg-red-500 animate-breathe"></span>LIVE
+                   </span>`
+                : `<span class="shrink-0 text-xs font-semibold text-slate-400">離線</span>`}
+            </div>
+            <div class="text-xs text-slate-500 mt-0.5 truncate">twitch.tv/${escapeHtml(item.login)}</div>
+
+            ${isLive ? `
+              <div class="mt-2 flex items-center gap-1 text-xs text-slate-600">
+                <span class="material-symbols-outlined text-[17px]">group</span>
+                ${viewer.toLocaleString()} 人觀看
+                ${status.gameName ? ' · ' + escapeHtml(status.gameName) : ''}
               </div>
               ${status.title ? `
                 <div class="mt-1 text-sm text-slate-500 truncate">
@@ -1039,6 +1216,9 @@ async function loadAdminData() {
 
     renderAdminRequests(response.requests || []);
     renderAdminStreamers(response.streamers || []);
+
+    window.__adminTwitchStreamers = response.twitchStreamers || [];
+    renderAdminTwitchStreamers(window.__adminTwitchStreamers);
   } catch (error) {
     if (/密碼|登入/.test(error.message || '')) {
       adminLogout();
@@ -1142,6 +1322,191 @@ function renderAdminStreamers(items) {
       </button>
     </div>
   `).join('');
+}
+
+/*************************************************
+ * 管理後台：Twitch 追蹤名單
+ *************************************************/
+
+function renderAdminTwitchStreamers(items) {
+  const box = document.getElementById('adminTwitchStreamers');
+
+  if (!items.length) {
+    box.innerHTML = '<div class="text-sm text-slate-500 py-4">目前沒有追蹤的 Twitch 主播。</div>';
+    return;
+  }
+
+  box.innerHTML = items.map((item) => `
+    <div class="bg-white/50 rounded-2xl p-4 border border-white/60 flex flex-col lg:flex-row lg:items-center gap-3"
+         draggable="true"
+         data-twitch-id="${escapeAttr(item.id)}"
+         ondragstart="twitchDragStart(event)"
+         ondragover="twitchDragOver(event)"
+         ondrop="dropTwitchStreamer(event)"
+         ondragend="twitchDragEnd(event)">
+
+      <div class="cursor-grab text-slate-400">
+        <span class="material-symbols-outlined">drag_indicator</span>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-slate-800">${escapeHtml(item.title || item.login)}</div>
+        <div class="text-xs text-slate-500">twitch.tv/${escapeHtml(item.login)}</div>
+      </div>
+
+      <button class="px-3 py-2 rounded-lg text-xs bg-white hover:bg-slate-50"
+              onclick="editTwitchStreamer('${escapeAttr(item.id)}')">
+        修改
+      </button>
+
+      <button class="px-3 py-2 rounded-lg text-xs bg-red-50 text-red-600 hover:bg-red-100"
+              onclick="deleteTwitchStreamer('${escapeAttr(item.id)}')">
+        刪除
+      </button>
+    </div>
+  `).join('');
+}
+
+async function addTwitchStreamer() {
+  const btn = document.getElementById('addTwitchBtn');
+  const title = document.getElementById('newTwitchTitle').value.trim();
+  const login = document.getElementById('newTwitchLogin').value.trim();
+
+  if (!title || !login) {
+    showToast('請填寫暱稱與 Twitch 帳號', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+
+  try {
+    const response = await callServer('addTwitchStreamer', title, login, adminPassword);
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '新增失敗');
+    }
+
+    document.getElementById('newTwitchTitle').value = '';
+    document.getElementById('newTwitchLogin').value = '';
+
+    showToast(response.message || 'Twitch 主播新增成功', 'success');
+
+    await loadAdminData();
+    twitchListLoaded = false;
+  } catch (error) {
+    showToast(error.message || '新增失敗', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function editTwitchStreamer(id) {
+  const item = (window.__adminTwitchStreamers || []).find(x => String(x.id) === String(id));
+
+  const title = prompt('暱稱：', item ? item.title : '');
+  if (title === null) return;
+
+  const login = prompt('Twitch 帳號：', item ? item.login : '');
+  if (login === null) return;
+
+  try {
+    const response = await callServer('updateTwitchStreamer', id, title, login, adminPassword);
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '更新失敗');
+    }
+
+    showToast(response.message || 'Twitch 主播資料已更新', 'success');
+
+    await loadAdminData();
+    twitchListLoaded = false;
+  } catch (error) {
+    showToast(error.message || '更新失敗', 'error');
+  }
+}
+
+async function deleteTwitchStreamer(id) {
+  if (!confirm('確定要刪除這位 Twitch 追蹤主播嗎？')) return;
+
+  try {
+    const response = await callServer('deleteTwitchStreamer', id, adminPassword);
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '刪除失敗');
+    }
+
+    showToast(response.message || 'Twitch 主播已刪除', 'success');
+
+    await loadAdminData();
+    twitchListLoaded = false;
+  } catch (error) {
+    showToast(error.message || '刪除失敗', 'error');
+  }
+}
+
+let draggedTwitchId = null;
+
+function twitchDragStart(event) {
+  const el = event.currentTarget;
+  draggedTwitchId = el.dataset.twitchId;
+  el.classList.add('opacity-50');
+
+  if (event.dataTransfer) {
+    event.dataTransfer.setData('text/plain', draggedTwitchId);
+  }
+}
+
+function twitchDragOver(event) {
+  event.preventDefault();
+}
+
+function twitchDragEnd(event) {
+  event.currentTarget.classList.remove('opacity-50');
+}
+
+async function dropTwitchStreamer(event) {
+  event.preventDefault();
+
+  const targetId = event.currentTarget.dataset.twitchId;
+
+  if (!draggedTwitchId || !targetId || draggedTwitchId === targetId) {
+    draggedTwitchId = null;
+    return;
+  }
+
+  const box = document.getElementById('adminTwitchStreamers');
+  const nodes = Array.from(box.querySelectorAll('[data-twitch-id]'));
+
+  const from = nodes.findIndex(n => n.dataset.twitchId === draggedTwitchId);
+  const to = nodes.findIndex(n => n.dataset.twitchId === targetId);
+
+  if (from === -1 || to === -1) {
+    draggedTwitchId = null;
+    return;
+  }
+
+  const moved = nodes.splice(from, 1)[0];
+  nodes.splice(to, 0, moved);
+
+  const orders = nodes.map((node, index) => ({
+    id: node.dataset.twitchId,
+    order: index + 1
+  }));
+
+  draggedTwitchId = null;
+
+  try {
+    const response = await callServer('updateTwitchStreamerOrder', orders, adminPassword);
+
+    if (response && response.success === false) {
+      throw new Error(response.error || '排序更新失敗');
+    }
+
+    await loadAdminData();
+    twitchListLoaded = false;
+  } catch (error) {
+    showToast(error.message || '排序更新失敗', 'error');
+  }
 }
 
 function editStreamer(id) {
