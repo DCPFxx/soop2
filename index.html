@@ -274,6 +274,63 @@ body {
   opacity: 1;
   transform: scale(1);
 }
+
+/* 背景跑馬燈：貼齊整個畫面、貼在最底層、不影響點擊 */
+.bg-marquee-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+.bg-marquee-track {
+  display: flex;
+  white-space: nowrap;
+  animation: bgMarqueeScroll 32s linear infinite;
+  will-change: transform;
+}
+.bg-marquee-track span {
+  font-size: clamp(22px, 5vw, 54px);
+  font-weight: 800;
+  color: rgba(30, 41, 59, 0.07);
+  padding: 0 40px;
+  letter-spacing: 2px;
+}
+@keyframes bgMarqueeScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+#appMain {
+  position: relative;
+  z-index: 1;
+}
+
+/* 「推薦其他主播」：hover 時游標放大、旁邊跳出 Please Click 提示 */
+#tab-request:hover,
+#tab-request:focus-visible {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'><circle cx='22' cy='22' r='18' fill='%232563eb' fill-opacity='0.5' stroke='white' stroke-width='2.5'/></svg>") 22 22,
+    pointer;
+}
+.please-click-hint::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  right: 20px;
+  width: 8px;
+  height: 8px;
+  background: #1e293b;
+  transform: rotate(45deg);
+}
+.group:hover .please-click-hint {
+  animation: pleaseClickBounce .9s ease-in-out infinite;
+}
+@keyframes pleaseClickBounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.05); }
+}
 .dragging { opacity: .55 !important; }
 .drag-over { outline: 2px dashed #3b82f6; outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
@@ -282,7 +339,14 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
 <body class="font-sans antialiased min-h-screen">
 
-<div class="max-w-[1200px] mx-auto px-4 py-8 pb-16">
+<div class="bg-marquee-layer" aria-hidden="true">
+  <div class="bg-marquee-track">
+    <span>歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　</span>
+    <span>歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　</span>
+  </div>
+</div>
+
+<div class="max-w-[1200px] mx-auto px-4 py-8 pb-16" id="appMain">
 
 <header class="mb-7">
   <h1 class="text-3xl font-bold flex items-center gap-3 text-slate-800 drop-shadow-sm">
@@ -299,9 +363,14 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   <button id="tab-gallery" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('gallery')">
     <span class="material-symbols-outlined text-[20px]">photo_library</span>圖片牆
   </button>
-  <button id="tab-request" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
-    <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
-  </button>
+  <div class="relative flex-1 group">
+    <button id="tab-request" class="tab-btn w-full py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
+      <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
+    </button>
+    <span class="please-click-hint absolute -top-9 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30 flex items-center gap-1 bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap">
+      <span class="material-symbols-outlined text-[14px]">touch_app</span>Please Click
+    </span>
+  </div>
   <button id="tab-admin" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('admin')">
     <span class="material-symbols-outlined text-[20px]">settings</span>管理
   </button>
