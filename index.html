@@ -275,28 +275,36 @@ body {
   transform: scale(1);
 }
 
-/* 背景跑馬燈：貼齊整個畫面、貼在最底層、不影響點擊 */
+/* 背景跑馬燈：固定在畫面右上角的一個小長方型區域 */
 .bg-marquee-layer {
   position: fixed;
-  inset: 0;
-  z-index: 0;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  width: min(320px, calc(100vw - 32px));
+  height: 34px;
   overflow: hidden;
   pointer-events: none;
   display: flex;
   align-items: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,.55);
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: 0 4px 14px rgba(15,23,42,.08);
+  backdrop-filter: blur(4px);
 }
 .bg-marquee-track {
   display: flex;
   white-space: nowrap;
-  animation: bgMarqueeScroll 32s linear infinite;
+  animation: bgMarqueeScroll 18s linear infinite;
   will-change: transform;
 }
 .bg-marquee-track span {
-  font-size: clamp(22px, 5vw, 54px);
-  font-weight: 800;
-  color: rgba(30, 41, 59, 0.07);
-  padding: 0 40px;
-  letter-spacing: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(37, 99, 235, .75);
+  padding: 0 18px;
+  letter-spacing: .5px;
 }
 @keyframes bgMarqueeScroll {
   from { transform: translateX(0); }
@@ -307,11 +315,31 @@ body {
   z-index: 1;
 }
 
-/* 「推薦其他主播」：hover 時游標放大、旁邊跳出 Please Click 提示 */
+/* 自訂動畫游標（滑貓貓） */
+.custom-cursor-img {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 68px;
+  height: 68px;
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+  transform: translate(-10px, -8px);
+  filter: drop-shadow(0 5px 10px rgba(15,23,42,.28));
+  image-rendering: pixelated;
+}
+body.custom-cursor-active,
+body.custom-cursor-active * {
+  cursor: none;
+}
+
+/* 「推薦其他主播」：hover 時游標放大成經典 Windows 箭頭（放大版），
+   旁邊跳出配色一致的 Please Click 提示 */
 #tab-request:hover,
 #tab-request:focus-visible {
   cursor:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'><circle cx='22' cy='22' r='18' fill='%232563eb' fill-opacity='0.5' stroke='white' stroke-width='2.5'/></svg>") 22 22,
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='88' height='88' viewBox='0 0 32 32'><path d='M6 2 L6 26 L11.5 20.5 L15.5 28.5 L19 27 L15 19 L23 19 Z' fill='white' stroke='black' stroke-width='1.6' stroke-linejoin='round'/></svg>") 13 4,
     pointer;
 }
 .please-click-hint::after {
@@ -321,7 +349,7 @@ body {
   right: 20px;
   width: 8px;
   height: 8px;
-  background: #1e293b;
+  background: #2563eb;
   transform: rotate(45deg);
 }
 .group:hover .please-click-hint {
@@ -338,6 +366,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 </head>
 
 <body class="font-sans antialiased min-h-screen">
+
+<img id="customCursor" class="custom-cursor-img" alt="" draggable="false">
 
 <div class="bg-marquee-layer" aria-hidden="true">
   <div class="bg-marquee-track">
@@ -367,8 +397,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
     <button id="tab-request" class="tab-btn w-full py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
       <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
     </button>
-    <span class="please-click-hint absolute -top-9 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30 flex items-center gap-1 bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap">
-      <span class="material-symbols-outlined text-[14px]">touch_app</span>Please Click
+    <span class="please-click-hint absolute -top-9 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-30 flex items-center gap-1 bg-gradient-to-r from-blue-500 to-sky-400 text-white text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap shadow-md shadow-blue-500/30">
+      <span class="material-symbols-outlined text-[14px]">touch_app</span>PLEASE CLICK
     </span>
   </div>
   <button id="tab-admin" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('admin')">
@@ -622,6 +652,77 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 </div>
 
 <script>
+/*
+ * 自訂動畫游標（.ani 檔案裡拆出來的 3 幀畫面，改用 JS
+ * 逐格切換模擬動畫，因為瀏覽器的 CSS cursor 不支援
+ * 播放動畫格式）。只在滑鼠裝置（非觸控）上啟用，
+ * 且滑到「推薦其他主播」按鈕時會讓位給該按鈕自己的
+ * 放大箭頭游標。
+ */
+(function() {
+  const CURSOR_FRAMES = [
+    'data:image/png;base64,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',
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAGHElEQVR4nO3dv4scZRgH8IkoxFpJNDai4FVXplJWcLlWUosgVwT/ABHSnBbXBPwLJMUhBOvDNpyQQyvLq06I2CTmgtYGLGIRIjE37zd552ZnZ3Y/n3Juf87u9+Z9n31m3nOvv/bmo2aJ/vzrj3PLfH5IXlr2C4AxExAIBASCl5/d8P3Pvy30CT95/52FPj70yREEAgGBQEAgODUHedZH771ypif48dd/znR/WCZHEAgEBAIBgeC5c5Baz845/O7BlDmCQCAgEAgIBGeeg9TOOZz/wZQ4gkAgIBAICATVcxBzDtaJIwgEAgKBgEDw3DmIOQfrzBEEAgGBQEAgOHfWa/Oac7DKHEEgEBAIBAQAAAAAAADW0Mr0UV24eKnYU/bg5N7KvE+G5Zd0CAQEAgGBQEAgEBAIJlfdKVWrtnf3W2+/t3Ol+FiqW8ObWrWx9yXYFint3Plss3X73sJeDevAEAsCAYFAQCAQEAgmNUnvolTdapqm2du50jrpH2M1ZWpqq41NM87PY+UDUqpuHRweDfxKeKLtMxnr52GIBYGAQCAgEAgIBCs/Se8itbSMzbIrbrX7qlQ0GauVCcjWxvnW7beOH7Zun882m/ntO6e2HxwexQbHsblw8dKjZYUkheNmy76dIkMsCAQEAgGBQEAgEBAIJtWUl6omJ/fvVj9eqcI1JcuuupWqVbVVxZL0/oao3jmCQCAgEAgIBAICgYBAsDK9WCWlqsnWxvlipWVaNpsmnMa6SPPZZvU+7Ku6NZSVD8iqe/yFm1aHbJutjfOjDIkhFgQCAoGAQCAgEIxykp56rtKFx9qsRqUqW4f3uCyjDEjJ9u5+c/3q5WW/DNaIIRYEAgKBgEAgIBAICAQCAoGAQCAgEAgIBAICgYBAsNRerLQSqp6r1TTGswYTRxAIBAQCAYFAQCAQEAgmdUYh09FXtWo+K18Yb2/nSmsVtM9lEQSE0SstHb1XuH2fK/8aYkEgIBAICAQCAsEgk/TUc9WmNClLrt34per2XS7dz7iUvj97O1eK37nayfvSq1htYejyxa1e6XV3v9na0BD5osbYZFhb3erCEAsCAYFAQCAQEAiWOknvUq3itNoJdG0R5Nbxw+bg8KjqPrX6/C5s7+4XizZt1a1U2Vp6Fat21VOl2f+7duOX6greyf27rdtL+/zg8Ki+SlgrrPtSG575bLOZ375zanvpfaTeLUMsCAQEAgGBQEAgEBAIll7F6kupMsOLK1V5tnf3F75/YzWux6bWWo4gEAgIBAICgYBAICAQjLaKtegerdSAV1p6oXRab+n2XZ6j1vWrl5v57HTfUVLah136rf7+5tvW7T99/Fnr9g9++K51+9dN09o/1TRN8+mH77Y/eWV1q8tF6EYbkEVLJc2S0hdoPrvTGtAuz9FFl38OY/Pql583Wy3b+36tbeFJncqGWBAICAQCAoGAQDCpSfoQk8vHk+r91r+VJtcHh0fNweGiXtF43Tp+2DSFalVJqbrVHD8sFhvSBeJaPXX7+Wzzv0l4l96t0QakNgx9nqJb2vGlhr0up70Ooc9/KEP8cyo9R6kkvrfz/Md8ukJ1cHhUHRJDLAgEhLXRZYglIKyNLpcuEhAIep2kly45X2uICeF8ttnrVcAZXm3LTpchVm+rgaZw9LkOCItTagr8/YuvivepbUqsfZyktqG1JF0YzxALAgGBQEAgEBAIBASC0fZisTilH8xK1ca3Q5/ZzQ7Vp74M8XOAIwgEAgKBgEAgIBAICASDVLFKPVd99dIki16ddR2kpsBS/1b1tb9G+jmN8ghiJVvGYpQBgbEQEAgEBAIBgaC6itXlzMEuk+7a+5SWJoCzqD7lNgXkZmF9hyGqUhffeKv4twcn93o7tZj1YogFgYBAICAQCAgEAgKBgEAgIBAICAQCAoGAQCAgEEzuwnFDXCwMnnAEgUBAIBAQCAQEAgGBoNOZdrWr2ZbONOyidKGyEmcTchadyrxtX7q+loBO0lUSBYFFMMSCQEAgEBAIBASC3nqxHpzcO1eaqFuCgKkapPLTZ4VLtYohGWJBICAQCAgEAgKBgAAAAAAAAAAAAAAAAAAr41+B+cA1aiIXtgAAAABJRU5ErkJggg==',
+    'data:image/png;base64,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'
+  ];
+  const FRAME_INTERVAL = 100;
+
+  if (!window.matchMedia || !window.matchMedia('(pointer: fine)').matches) {
+    return;
+  }
+
+  const cursorImg = document.getElementById('customCursor');
+  if (!cursorImg) return;
+
+  let frameIndex = 0;
+  let started = false;
+  let hoveringRequestTab = false;
+
+  function tick() {
+    frameIndex = (frameIndex + 1) % CURSOR_FRAMES.length;
+    cursorImg.src = CURSOR_FRAMES[frameIndex];
+  }
+
+  function showCursor() {
+    if (!hoveringRequestTab) {
+      cursorImg.style.display = 'block';
+    }
+  }
+
+  document.addEventListener('mousemove', (event) => {
+    if (!started) {
+      started = true;
+      document.body.classList.add('custom-cursor-active');
+      cursorImg.src = CURSOR_FRAMES[0];
+      showCursor();
+      setInterval(tick, FRAME_INTERVAL);
+    }
+    cursorImg.style.left = event.clientX + 'px';
+    cursorImg.style.top = event.clientY + 'px';
+  });
+
+  document.addEventListener('mouseleave', () => {
+    cursorImg.style.display = 'none';
+  });
+
+  document.addEventListener('mouseenter', () => {
+    if (started) showCursor();
+  });
+
+  const requestTab = document.getElementById('tab-request');
+
+  if (requestTab) {
+    requestTab.addEventListener('mouseenter', () => {
+      hoveringRequestTab = true;
+      cursorImg.style.display = 'none';
+    });
+
+    requestTab.addEventListener('mouseleave', () => {
+      hoveringRequestTab = false;
+      showCursor();
+    });
+  }
+})();
 /*
  * ★ Vercel → GAS API 正式連線
  *
