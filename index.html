@@ -192,6 +192,88 @@ body {
 .lightbox-nav-prev { left: 16px; }
 .lightbox-nav-next { right: 16px; }
 .lightbox-nav.hidden { display: none; }
+
+/* 圖片牆：作品集區塊、縮圖漸入漸出與彈出效果 */
+.gallery-section {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1);
+}
+.gallery-section.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.gallery-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: zoom-in;
+  opacity: 0;
+  transform: translateY(18px) scale(.94);
+  transition:
+    opacity .5s ease,
+    transform .45s cubic-bezier(.2,.85,.3,1.15),
+    box-shadow .25s ease;
+  box-shadow: 0 2px 10px rgba(15,23,42,.06);
+}
+.gallery-thumb.in-view {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.gallery-thumb:hover,
+.gallery-thumb:focus-visible {
+  transform: translateY(-6px) scale(1.035);
+  box-shadow: 0 16px 32px rgba(15,23,42,.18);
+  z-index: 2;
+}
+.gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .5s ease, filter .3s ease;
+}
+.gallery-thumb:hover img {
+  transform: scale(1.12);
+}
+.gallery-thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(15,23,42,.35), transparent 55%);
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+.gallery-thumb:hover::after {
+  opacity: 1;
+}
+.gallery-thumb .gallery-zoom-icon {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.9);
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(.7);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.gallery-thumb:hover .gallery-zoom-icon {
+  opacity: 1;
+  transform: scale(1);
+}
 .dragging { opacity: .55 !important; }
 .drag-over { outline: 2px dashed #3b82f6; outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
@@ -213,6 +295,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 <nav class="glass-panel flex gap-2 p-2 rounded-2xl mb-8 sticky top-4 z-20 shadow-sm">
   <button id="tab-list" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('list')">
     <span class="material-symbols-outlined text-[20px]">grid_view</span>主播列表
+  </button>
+  <button id="tab-gallery" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('gallery')">
+    <span class="material-symbols-outlined text-[20px]">photo_library</span>圖片牆
   </button>
   <button id="tab-request" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
     <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
@@ -286,6 +371,25 @@ button:disabled { opacity: .55; cursor: not-allowed; }
       </div>
     </div>
   </div>
+
+</section>
+
+<!-- GALLERY -->
+<section class="page-section hidden" id="page-gallery">
+
+  <div class="flex flex-wrap items-center gap-3 mb-8">
+    <button id="galleryRefreshBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-sm transition-all flex items-center gap-2" onclick="loadGallery(true)">
+      <span class="material-symbols-outlined text-[20px]">sync</span>
+      重新整理
+    </button>
+    <p class="text-sm text-slate-500">點圖片可以放大成原本尺寸瀏覽。</p>
+  </div>
+
+  <div class="hidden text-center py-12 text-slate-500 font-medium animate-pulse" id="galleryLoading">
+    正在載入圖片牆...
+  </div>
+
+  <div id="galleryContainer" class="space-y-14"></div>
 
 </section>
 
@@ -463,6 +567,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwwNEYVx2elT6FLZla7
 let adminPassword = '';
 let streamers = [];
 let listLoaded = false;
+let galleryLoaded = false;
 let currentSelectedId = null;
 let carouselTimer = null;
 let carouselImages = [];
@@ -554,7 +659,7 @@ function activateTab(name) {
 }
 
 function showPage(name) {
-  ['list','request','admin'].forEach(page => {
+  ['list','gallery','request','admin'].forEach(page => {
     const el = document.getElementById('page-' + page);
     if (el) el.classList.toggle('hidden', page !== name);
   });
@@ -564,6 +669,10 @@ function showPage(name) {
   if (name === 'list' && !listLoaded) {
     listLoaded = true;
     loadStreamers();
+  }
+
+  if (name === 'gallery') {
+    loadGallery();
   }
 
   if (name === 'admin' && adminPassword) {
@@ -761,6 +870,143 @@ function renderCards() {
         </div>
       </article>`;
   }).join('');
+}
+
+/*************************************************
+ * 圖片牆分頁：每位主播各自一區、依序向下排列，
+ * 圖片捲動進入畫面時漸入漸出彈出，點圖放大用既有燈箱。
+ *************************************************/
+
+async function loadGallery(forceRefresh = false) {
+  const loading = document.getElementById('galleryLoading');
+  const container = document.getElementById('galleryContainer');
+  const btn = document.getElementById('galleryRefreshBtn');
+
+  if (!container) return;
+
+  // 資料已經載入過、也不是強制重整，直接用現有的 streamers 畫，
+  // 不用重新打一次 API。
+  if (galleryLoaded && !forceRefresh && streamers.length) {
+    renderGallery();
+    return;
+  }
+
+  loading.classList.remove('hidden');
+  if (btn) btn.disabled = true;
+
+  try {
+    // 主播列表跟圖片牆本來就是同一份資料（SOOP + Twitch 合併），
+    // 直接共用 loadStreamers()，不用另外打一次 API。
+    await loadStreamers(forceRefresh || !listLoaded);
+    listLoaded = true;
+    galleryLoaded = true;
+    renderGallery();
+  } finally {
+    loading.classList.add('hidden');
+    if (btn) btn.disabled = false;
+  }
+}
+
+function renderGallery() {
+  const container = document.getElementById('galleryContainer');
+  if (!container) return;
+
+  const withImages = streamers.filter(item =>
+    Array.isArray(item.images) && item.images.length
+  );
+
+  if (!withImages.length) {
+    container.innerHTML = `
+      <div class="text-center py-16 text-slate-500">
+        <div class="font-bold mb-2">目前還沒有可以顯示的圖片</div>
+        <div class="text-sm">到「管理」分頁替主播新增圖片網址後，這裡就會出現。</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = withImages.map((item, sectionIndex) => {
+    const isTwitch = item.platform === 'twitch';
+    const status = item.status || {};
+    const nickname = isTwitch
+      ? (item.title || status.displayName || item.login)
+      : (item.title || status.nickname || item.content);
+
+    const platformBadge = isTwitch
+      ? '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">Twitch</span>'
+      : '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-600">SOOP</span>';
+
+    const thumbs = item.images.map((url, imageIndex) => `
+      <div class="gallery-thumb" data-index="${imageIndex}"
+           onclick="openGalleryLightbox('${escapeAttr(item.cardKey)}', ${imageIndex})">
+        <img src="${escapeAttr(url)}" alt="${escapeAttr(nickname)}" loading="lazy"
+             onerror="this.closest('.gallery-thumb').style.display='none';">
+        <span class="gallery-zoom-icon material-symbols-outlined text-[18px]">zoom_in</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="gallery-section" style="transition-delay:${Math.min(sectionIndex, 5) * 70}ms">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-9 h-9 rounded-full bg-white/70 border border-white shadow-sm overflow-hidden shrink-0">
+            <img src="${escapeAttr(status.avatarUrl || '')}" alt="" class="w-full h-full object-cover"
+                 onerror="this.style.display='none';">
+          </div>
+          <h3 class="text-lg font-bold text-slate-800">${escapeHtml(nickname)}</h3>
+          ${platformBadge}
+        </div>
+        <div class="gallery-grid">
+          ${thumbs}
+        </div>
+      </div>`;
+  }).join('');
+
+  setupGalleryObserver();
+}
+
+function openGalleryLightbox(cardKey, index) {
+  const item = streamers.find(x => x.cardKey === cardKey);
+  if (!item || !Array.isArray(item.images) || !item.images.length) return;
+
+  carouselImages = item.images;
+  openLightbox(index);
+}
+
+function setupGalleryObserver() {
+  const sections = document.querySelectorAll('#galleryContainer .gallery-section');
+  const thumbs = document.querySelectorAll('#galleryContainer .gallery-thumb');
+
+  if (!('IntersectionObserver' in window)) {
+    sections.forEach(el => el.classList.add('in-view'));
+    thumbs.forEach(el => el.classList.add('in-view'));
+    return;
+  }
+
+  const sectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+        sectionObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+
+  sections.forEach(el => sectionObserver.observe(el));
+
+  const thumbObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        // 同一排圖片錯開一點延遲，滑到哪就一張張漸入彈出，
+        // 而不是整排同時瞬間出現。
+        const delay = (Number(el.dataset.index) % 6) * 60;
+        el.style.transitionDelay = delay + 'ms';
+        el.classList.add('in-view');
+        thumbObserver.unobserve(el);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  thumbs.forEach(el => thumbObserver.observe(el));
 }
 
 function selectStreamer(id) {
