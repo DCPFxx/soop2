@@ -393,6 +393,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   <button id="tab-gallery" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" onclick="showPage('gallery')">
     <span class="material-symbols-outlined text-[20px]">photo_library</span>圖片牆
   </button>
+  <button id="tab-instagram" class="tab-btn flex-1 py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 relative" onclick="showPage('instagram')">
+    <span class="material-symbols-outlined text-[20px]">photo_camera</span>Instagram 動態
+    <span id="instagramUnreadBadge" class="hidden absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-pink-500 text-white text-[10px] flex items-center justify-center font-bold">0</span>
+  </button>
   <div class="relative flex-1 group">
     <button id="tab-request" class="tab-btn w-full py-3 px-4 rounded-xl text-sm font-semibold" onclick="showPage('request')">
       <span class="material-symbols-outlined text-[20px]">campaign</span>推薦其他主播
@@ -490,6 +494,26 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
   <div id="galleryContainer" class="space-y-14"></div>
 
+</section>
+
+<!-- INSTAGRAM -->
+<section class="page-section hidden" id="page-instagram">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <div>
+      <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-2"><span class="material-symbols-outlined text-pink-500">photo_camera</span>Instagram 動態</h2>
+      <p class="text-sm text-slate-500 mt-1">主播有新貼文或 Reels 時，Instagram Monitor 推送後會出現在這裡。</p>
+    </div>
+    <button id="instagramRefreshBtn" class="bg-pink-500 hover:bg-pink-600 text-white px-5 py-2.5 rounded-xl font-semibold shadow-sm transition-all flex items-center gap-2" onclick="loadInstagramPosts(true)">
+      <span class="material-symbols-outlined text-[20px]">sync</span>重新整理
+    </button>
+  </div>
+  <div id="instagramLoading" class="hidden text-center py-12 text-slate-500 font-medium animate-pulse">正在載入 Instagram 動態...</div>
+  <div id="instagramEmpty" class="hidden glass-panel rounded-2xl p-10 text-center text-slate-500">
+    <span class="material-symbols-outlined text-5xl text-slate-300">photo_camera</span>
+    <div class="font-bold mt-3">目前還沒有 Instagram 動態</div>
+    <div class="text-sm mt-1">等待 Instagram Monitor 推送新貼文或 Reels。</div>
+  </div>
+  <div id="instagramContainer" class="space-y-4"></div>
 </section>
 
 <!-- REQUEST -->
@@ -744,6 +768,9 @@ let carouselImages = [];
 let carouselActiveIndex = 0;
 let lightboxIndex = 0;
 let adminBusy = false;
+let instagramPosts = [];
+let instagramTimer = null;
+const INSTAGRAM_SEEN_KEY = 'instagram_seen_post_ids_v1';
 
 document.addEventListener('DOMContentLoaded', () => {
   activateTab(INITIAL_PAGE);
@@ -768,7 +795,8 @@ async function callServer(functionName, ...args) {
 
   const isGet = functionName === 'getAllSoopStatus' ||
                functionName === 'getAllTwitchStatus' ||
-               functionName === 'getHealth';
+               functionName === 'getHealth' ||
+               functionName === 'getInstagramPosts';
 
   let response;
 
@@ -829,7 +857,7 @@ function activateTab(name) {
 }
 
 function showPage(name) {
-  ['list','gallery','request','admin'].forEach(page => {
+  ['list','gallery','instagram','request','admin'].forEach(page => {
     const el = document.getElementById('page-' + page);
     if (el) el.classList.toggle('hidden', page !== name);
   });
@@ -845,9 +873,111 @@ function showPage(name) {
     loadGallery();
   }
 
+  if (name === 'instagram') {
+    loadInstagramPosts();
+    startInstagramPolling();
+  } else {
+    stopInstagramPolling();
+  }
+
   if (name === 'admin' && adminPassword) {
     loadAdminData();
   }
+}
+
+function getInstagramSeenIds() {
+  try { return JSON.parse(localStorage.getItem(INSTAGRAM_SEEN_KEY) || '[]'); } catch(e) { return []; }
+}
+
+function setInstagramSeenIds(ids) {
+  try { localStorage.setItem(INSTAGRAM_SEEN_KEY, JSON.stringify(ids.slice(-300))); } catch(e) {}
+}
+
+function markInstagramPostSeen(postId) {
+  const ids=getInstagramSeenIds();
+  if (ids.indexOf(String(postId))===-1) { ids.push(String(postId)); setInstagramSeenIds(ids); }
+  updateInstagramUnreadBadge();
+}
+
+function updateInstagramUnreadBadge() {
+  const badge=document.getElementById('instagramUnreadBadge');
+  if (!badge) return;
+  const seen=getInstagramSeenIds();
+  const unread=instagramPosts.filter(p=>seen.indexOf(String(p.postId))===-1).length;
+  badge.textContent=unread>99?'99+':String(unread);
+  badge.classList.toggle('hidden',unread===0);
+}
+
+function formatInstagramTime(ts) {
+  if (!ts) return '';
+  const d=new Date(Number(ts));
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+function renderInstagramPosts() {
+  const container=document.getElementById('instagramContainer');
+  const empty=document.getElementById('instagramEmpty');
+  if (!container || !empty) return;
+  if (!instagramPosts.length) { container.innerHTML=''; empty.classList.remove('hidden'); updateInstagramUnreadBadge(); return; }
+  empty.classList.add('hidden');
+  const seen=getInstagramSeenIds();
+  container.innerHTML=instagramPosts.map((p,index)=>{
+    const isNew=seen.indexOf(String(p.postId))===-1;
+    const type=p.type==='reel'?'REEL':'POST';
+    const typeClass=p.type==='reel'?'bg-purple-100 text-purple-700':'bg-pink-100 text-pink-700';
+    const caption=escapeHtml(p.caption||'').replace(/\n/g,'<br>');
+    return `<article class="glass-panel rounded-2xl overflow-hidden shadow-sm border border-white/70 ${isNew?'ring-2 ring-pink-200':''}" data-instagram-id="${escapeAttr(p.postId)}">
+      <div class="flex gap-4 p-4 sm:p-5">
+        <div class="w-28 h-28 sm:w-36 sm:h-36 shrink-0 rounded-xl overflow-hidden bg-slate-100">
+          ${p.thumbnail?`<img src="${escapeAttr(p.thumbnail)}" loading="lazy" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=\'material-symbols-outlined text-4xl text-slate-300 flex items-center justify-center w-full h-full\'>image</span>'">`:'<span class="material-symbols-outlined text-4xl text-slate-300 flex items-center justify-center w-full h-full">image</span>'}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2 mb-1">
+            <strong class="text-lg text-slate-800">${escapeHtml(p.streamerName||p.username)}</strong>
+            <span class="text-xs font-bold px-2 py-1 rounded-full ${typeClass}">${type}</span>
+            ${isNew?'<span class="text-xs font-bold px-2 py-1 rounded-full bg-red-500 text-white">NEW</span>':''}
+          </div>
+          <div class="text-sm text-slate-500">@${escapeHtml(p.username)} · ${escapeHtml(formatInstagramTime(p.timestamp||p.createdAt))}</div>
+          ${caption?`<div class="text-sm text-slate-700 mt-3 line-clamp-3 leading-6">${caption}</div>`:''}
+          <div class="mt-4 flex flex-wrap gap-2">
+            <a href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 px-4 py-2 rounded-full text-sm font-semibold transition-colors"><span class="material-symbols-outlined text-[18px]">open_in_new</span>查看 Instagram</a>
+            ${isNew?`<button type="button" onclick="markInstagramPostSeen('${escapeAttr(p.postId)}'); renderInstagramPosts();" class="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-full text-sm font-semibold">標記已讀</button>`:''}
+          </div>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+  updateInstagramUnreadBadge();
+}
+
+async function loadInstagramPosts(forceRefresh=false) {
+  const loading=document.getElementById('instagramLoading');
+  const btn=document.getElementById('instagramRefreshBtn');
+  if (!loading) return;
+  loading.classList.remove('hidden');
+  if (btn) btn.disabled=true;
+  try {
+    if (forceRefresh) await callServer('clearInstagramCache');
+    const response=await callServer('getInstagramPosts');
+    if (!response || response.success===false) throw new Error(response?.error || '取得 Instagram 動態失敗');
+    instagramPosts=Array.isArray(response.data)?response.data:[];
+    renderInstagramPosts();
+  } catch(error) {
+    const container=document.getElementById('instagramContainer');
+    if (container) container.innerHTML=`<div class="glass-panel rounded-2xl p-8 text-center text-red-600"><div class="font-bold">Instagram 動態載入失敗</div><div class="text-sm mt-2">${escapeHtml(error.message||'未知錯誤')}</div></div>`;
+  } finally {
+    loading.classList.add('hidden');
+    if (btn) btn.disabled=false;
+  }
+}
+
+function startInstagramPolling() {
+  stopInstagramPolling();
+  instagramTimer=setInterval(()=>loadInstagramPosts(false),60000);
+}
+function stopInstagramPolling() {
+  if (instagramTimer) { clearInterval(instagramTimer); instagramTimer=null; }
 }
 
 async function loadStreamers(forceRefresh = false) {
