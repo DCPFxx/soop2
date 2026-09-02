@@ -291,41 +291,20 @@ body {
   overflow: hidden;
 }
 
-/* 背景跑馬燈：固定在畫面右上角的一個小長方型區域 */
+/* 右上角文字動畫：字元逐一上下浮動 */
 .bg-marquee-layer {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 30;
-  width: min(320px, calc(100vw - 32px));
-  height: 34px;
-  overflow: hidden;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
+  position: fixed; top: 16px; right: 16px; z-index: 30;
+  width: min(360px, calc(100vw - 32px)); height: 36px;
+  overflow: hidden; pointer-events: none; display: flex; align-items: center;
   border-radius: 999px;
-  background: rgba(255,255,255,.55);
-  border: 1px solid rgba(255,255,255,.7);
-  box-shadow: 0 4px 14px rgba(15,23,42,.08);
-  backdrop-filter: blur(4px);
+  background: rgba(239,246,255,.62);
+  border: 1px solid rgba(147,197,253,.48);
+  box-shadow: 0 5px 16px rgba(37,99,235,.08), inset 0 1px 0 rgba(255,255,255,.9);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-.bg-marquee-track {
-  display: flex;
-  white-space: nowrap;
-  animation: bgMarqueeScroll 18s linear infinite;
-  will-change: transform;
-}
-.bg-marquee-track span {
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(37, 99, 235, .75);
-  padding: 0 18px;
-  letter-spacing: .5px;
-}
-@keyframes bgMarqueeScroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
+.bg-marquee-text { width:100%; margin:0; padding:0 14px; text-align:center; white-space:nowrap; overflow:hidden; font-size:12px; line-height:1; font-weight:700; color:rgba(37,99,235,.82); letter-spacing:.35px; }
+.bg-marquee-text .char-wrap { overflow:clip; display:inline-block; vertical-align:middle; }
+.bg-marquee-text .char { display:inline-block; will-change:transform; }
 #appMain {
   position: relative;
   z-index: 1;
@@ -379,88 +358,126 @@ body.custom-cursor-active * {
 .drag-over { outline: 2px dashed #3b82f6; outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 
-/* =========================================================
-   🩵 藍粉毛玻璃直播區塊
-   卡片維持原本淡藍色；只有直播資訊與進入直播按鈕使用點綴色。
-   ========================================================= */
 
-.live-status-blue {
+/* =========================================================
+   🌸 主播卡片：粉紅流動玻璃效果
+   ========================================================= */
+.streamer-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255,182,213,.38), transparent 42%),
+    radial-gradient(circle at 100% 100%, rgba(244,114,182,.20), transparent 45%),
+    linear-gradient(135deg, rgba(255,255,255,.72), rgba(255,240,247,.48));
+  border: 1px solid rgba(255,255,255,.78);
+  box-shadow:
+    0 8px 24px rgba(236,72,153,.08),
+    inset 0 1px 0 rgba(255,255,255,.9);
+  transition: transform .35s cubic-bezier(.2,.8,.2,1),
+              box-shadow .35s ease,
+              border-color .35s ease,
+              background .35s ease;
+}
+
+.streamer-card::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 180px;
+  height: 180px;
+  left: -70px;
+  top: -90px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,105,180,.42) 0%, rgba(255,105,180,.18) 38%, transparent 72%);
+  filter: blur(8px);
+  animation: pinkBlobMove 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.streamer-card::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 170px;
+  height: 170px;
+  right: -70px;
+  bottom: -90px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(236,72,153,.32) 0%, rgba(244,114,182,.16) 40%, transparent 72%);
+  filter: blur(10px);
+  animation: pinkBlobMove2 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.streamer-card.is-live {
+  border-color: rgba(244,114,182,.58);
+  box-shadow:
+    0 10px 28px rgba(236,72,153,.16),
+    0 0 0 1px rgba(255,255,255,.5),
+    inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+.streamer-card.is-live:hover {
+  transform: translateY(-6px) scale(1.015);
+  border-color: rgba(236,72,153,.78);
+  box-shadow:
+    0 18px 42px rgba(236,72,153,.22),
+    0 0 28px rgba(244,114,182,.16),
+    inset 0 1px 0 rgba(255,255,255,1);
+}
+
+.streamer-card:not(.is-live):hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 14px 32px rgba(236,72,153,.10),
+    inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+.streamer-card.is-live.selected {
+  border-color: rgba(236,72,153,.82);
+  box-shadow:
+    0 0 0 2px rgba(244,114,182,.18),
+    0 16px 38px rgba(236,72,153,.20),
+    inset 0 1px 0 rgba(255,255,255,1);
+}
+
+.live-status {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
-  color: #2563eb;
-  background: linear-gradient(135deg, rgba(239,248,255,.92), rgba(219,239,255,.72));
-  border: 1px solid rgba(147,197,253,.55);
-  box-shadow: 0 4px 12px rgba(96,165,250,.12), inset 0 1px 0 rgba(255,255,255,.9);
+  color: #db2777;
+  background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(252,231,243,.82));
+  border: 1px solid rgba(244,114,182,.32);
+  box-shadow: 0 3px 10px rgba(236,72,153,.10);
 }
 
-.live-status-blue::before {
-  content: '';
+.live-status::before {
+  content: "";
   width: 7px;
   height: 7px;
+  flex-shrink: 0;
   border-radius: 50%;
-  background: #60a5fa;
-  box-shadow: 0 0 0 0 rgba(96,165,250,.45);
-  animation: blueLivePulse 1.7s infinite;
+  background: #ec4899;
+  box-shadow: 0 0 0 0 rgba(236,72,153,.5);
+  animation: livePulse 1.6s infinite;
 }
 
-.live-viewers-blue {
+.live-viewers {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: fit-content;
-  color: #3b82f6;
+  color: #be185d;
   font-weight: 600;
-  background: linear-gradient(90deg, rgba(239,248,255,.72), rgba(255,255,255,.38));
-  border: 1px solid rgba(147,197,253,.28);
+  background: linear-gradient(90deg, rgba(252,231,243,.65), rgba(255,255,255,.35));
   border-radius: 10px;
   padding: 5px 9px;
 }
 
-.detail-live-panel {
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(186,230,253,.48), transparent 48%),
-    radial-gradient(circle at 100% 100%, rgba(224,242,254,.55), transparent 52%),
-    linear-gradient(135deg, rgba(239,248,255,.86), rgba(248,252,255,.72));
-  border: 1px solid rgba(147,197,253,.42);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.92), 0 8px 22px rgba(96,165,250,.10);
-}
-
-.detail-live-panel::after {
-  content: '';
-  position: absolute;
-  width: 110px;
-  height: 110px;
-  right: -55px;
-  top: -55px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.42);
-  filter: blur(3px);
-  pointer-events: none;
-}
-
-.detail-live-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #2563eb;
-}
-
-.detail-live-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #60a5fa;
-  box-shadow: 0 0 0 4px rgba(147,197,253,.20);
-  animation: blueLivePulse 1.7s infinite;
-}
-
-.live-enter-btn-blue {
+.live-enter-btn {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -471,46 +488,102 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   width: 100%;
   padding: 11px 16px;
   border-radius: 14px;
-  color: #1e40af;
+  color: white;
   font-weight: 700;
-  background:
-    linear-gradient(135deg, rgba(239,248,255,.96), rgba(219,239,255,.90) 55%, rgba(248,250,255,.96));
-  border: 1px solid rgba(96,165,250,.48);
-  box-shadow: 0 7px 18px rgba(96,165,250,.14), inset 0 1px 0 rgba(255,255,255,.98);
-  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease, background .35s ease;
+  background: linear-gradient(120deg, #ec4899, #f472b6, #e879f9, #ec4899);
+  background-size: 250% 100%;
+  box-shadow:
+    0 8px 20px rgba(236,72,153,.22),
+    inset 0 1px 0 rgba(255,255,255,.35);
+  border: 1px solid rgba(255,255,255,.45);
+  transition: transform .25s ease, box-shadow .25s ease, background-position .5s ease;
 }
 
-.live-enter-btn-blue::before {
-  content: '';
+.live-enter-btn::before {
+  content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.72) 48%, transparent 72%);
-  transform: translateX(-125%);
+  background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.38) 45%, transparent 70%);
+  transform: translateX(-120%);
   transition: transform .65s ease;
   pointer-events: none;
-  z-index: -1;
 }
 
-.live-enter-btn-blue:hover {
+.live-enter-btn:hover {
   transform: translateY(-2px);
-  border-color: rgba(59,130,246,.62);
-  background: linear-gradient(135deg, rgba(224,242,254,.98), rgba(191,219,254,.86), rgba(239,246,255,.98));
-  box-shadow: 0 11px 25px rgba(96,165,250,.20), 0 0 18px rgba(147,197,253,.14), inset 0 1px 0 rgba(255,255,255,1);
+  background-position: 100% 50%;
+  box-shadow:
+    0 12px 28px rgba(236,72,153,.32),
+    0 0 18px rgba(244,114,182,.22);
 }
 
-.live-enter-btn-blue:hover::before { transform: translateX(125%); }
-.live-enter-btn-blue:active { transform: translateY(0) scale(.98); }
+.live-enter-btn:hover::before { transform: translateX(120%); }
+.live-enter-btn:active { transform: translateY(0) scale(.98); }
 
-@keyframes blueLivePulse {
-  0% { box-shadow: 0 0 0 0 rgba(96,165,250,.48); }
-  70% { box-shadow: 0 0 0 7px rgba(96,165,250,0); }
-  100% { box-shadow: 0 0 0 0 rgba(96,165,250,0); }
+.streamer-card .streamer-avatar {
+  transition: box-shadow .35s ease, transform .35s ease;
+}
+
+.streamer-card.is-live .streamer-avatar {
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.85),
+    0 0 0 4px rgba(244,114,182,.30),
+    0 6px 18px rgba(236,72,153,.18);
+}
+
+.streamer-card.is-live:hover .streamer-avatar {
+  transform: scale(1.04);
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.95),
+    0 0 0 5px rgba(244,114,182,.38),
+    0 8px 22px rgba(236,72,153,.24);
+}
+
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(236,72,153,.55); }
+  70% { box-shadow: 0 0 0 7px rgba(236,72,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(236,72,153,0); }
+}
+
+@keyframes pinkBlobMove {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(55px, 35px) scale(1.18); }
+}
+
+@keyframes pinkBlobMove2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-45px, -35px) scale(1.15); }
+}
+
+@media (max-width: 640px) {
+  .streamer-card.is-live:hover { transform: translateY(-3px) scale(1.005); }
+  .live-enter-btn { padding: 10px 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .live-status-blue::before, .detail-live-dot { animation: none; }
-  .live-enter-btn-blue { transition: none; }
+  .streamer-card::before,
+  .streamer-card::after,
+  .live-status::before { animation: none; }
+  .streamer-card,
+  .live-enter-btn { transition: none; }
 }
+
+
+/* 直播詳細欄位：淡藍／冰藍玻璃 */
+.live-detail-panel { position:relative; overflow:hidden; border-radius:16px; padding:14px 16px; background:linear-gradient(135deg,rgba(255,255,255,.84),rgba(219,234,254,.72)); border:1px solid rgba(147,197,253,.48); box-shadow:0 7px 20px rgba(37,99,235,.08),inset 0 1px 0 rgba(255,255,255,.92); }
+.live-detail-title { display:flex; align-items:center; gap:9px; color:#2563eb; font-weight:700; }
+.live-detail-title::before { content:''; width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:#60a5fa; box-shadow:0 0 0 4px rgba(96,165,250,.14); animation:liveBluePulse 1.8s ease-out infinite; }
+.live-viewers { display:inline-flex; align-items:center; gap:6px; color:#475569; font-size:.875rem; font-weight:600; background:rgba(255,255,255,.58); border:1px solid rgba(191,219,254,.62); border-radius:11px; padding:6px 10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.9); }
+.live-enter-btn { position:relative; isolation:isolate; overflow:hidden; display:flex; align-items:center; justify-content:center; gap:9px; width:100%; padding:12px 16px; border-radius:14px; color:#2563eb !important; font-weight:700; text-decoration:none; background:linear-gradient(135deg,rgba(255,255,255,.92),rgba(219,234,254,.78)) !important; border:1px solid rgba(59,130,246,.62) !important; box-shadow:0 7px 20px rgba(37,99,235,.12),inset 0 1px 0 rgba(255,255,255,.96); transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease,background .22s ease; }
+.live-enter-btn::before { content:''; position:absolute; inset:0; z-index:-1; background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.8) 48%,transparent 72%); transform:translateX(-120%); transition:transform .65s ease; }
+.live-enter-btn::after { content:''; position:absolute; right:-35px; top:-45px; width:90px; height:90px; border-radius:50%; background:rgba(96,165,250,.14); filter:blur(13px); pointer-events:none; }
+.live-enter-btn:hover { transform:translateY(-2px); color:#1d4ed8 !important; background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(191,219,254,.82)) !important; border-color:rgba(37,99,235,.78) !important; box-shadow:0 11px 26px rgba(37,99,235,.16),0 0 16px rgba(96,165,250,.12),inset 0 1px 0 #fff; }
+.live-enter-btn:hover::before { transform:translateX(120%); }
+.live-enter-btn:active { transform:translateY(0) scale(.985); }
+.live-enter-dot { width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:#3b82f6; box-shadow:0 0 0 4px rgba(59,130,246,.12); animation:liveBluePulse 1.8s ease-out infinite; }
+@keyframes liveBluePulse { 0%{box-shadow:0 0 0 0 rgba(59,130,246,.40)} 70%{box-shadow:0 0 0 7px rgba(59,130,246,0)} 100%{box-shadow:0 0 0 0 rgba(59,130,246,0)} }
+@media (prefers-reduced-motion:reduce){.live-detail-title::before,.live-enter-dot{animation:none}}
+
 </style>
 </head>
 
@@ -519,10 +592,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 <img id="customCursor" class="custom-cursor-img" alt="" draggable="false">
 
 <div class="bg-marquee-layer" aria-hidden="true">
-  <div class="bg-marquee-track">
-    <span>歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　</span>
-    <span>歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦　★　</span>
-  </div>
+  <p class="bg-marquee-text" id="bgMarqueeText">歡迎各位薛寶推薦喜歡的主播，在上方欄位可以進行推薦 ★</p>
 </div>
 
 <div class="max-w-[1200px] mx-auto px-4 py-8 pb-16" id="appMain">
@@ -599,9 +669,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
         <div id="detailStatus" class="mb-5"></div>
 
-        <a class="hidden w-full bg-red-500 hover:bg-red-600 text-white text-center font-bold py-3 rounded-xl mb-3 transition-colors shadow-sm items-center justify-center gap-2" href="#" id="detailEnterStream" target="_blank" rel="noopener noreferrer">
-          <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
-          進入直播
+        <a class="hidden live-enter-btn mb-3" href="#" id="detailEnterStream" target="_blank" rel="noopener noreferrer">
+          <span class="live-enter-dot"></span>
+          <span>進入直播</span>
         </a>
 
         <a class="hidden inline-flex items-center gap-2 text-pink-600 font-semibold bg-pink-50 hover:bg-pink-100 px-4 py-2 rounded-full transition-colors mb-5" href="#" id="detailIgLink" target="_blank" rel="noopener noreferrer">
@@ -1173,13 +1243,13 @@ function renderCards() {
 
     return `
       <article
-        class="glass-card rounded-2xl p-5 cursor-pointer opacity-0 animate-fade-in-up ${selected ? 'selected' : ''}"
+        class="glass-card streamer-card ${isLive ? 'is-live' : ''} rounded-2xl p-5 cursor-pointer opacity-0 animate-fade-in-up ${selected ? 'selected' : ''}"
         style="animation-delay:${index * 45}ms"
         id="card-${escapeAttr(item.cardKey)}"
         onclick="selectStreamer('${escapeAttr(item.cardKey)}')">
 
         <div class="flex items-start gap-4">
-          <div class="shrink-0 w-12 h-12 rounded-full bg-white/70 border border-white shadow-sm relative overflow-hidden">
+          <div class="streamer-avatar shrink-0 w-12 h-12 rounded-full bg-white/70 border border-white shadow-sm relative overflow-hidden">
             <img
               src="${escapeAttr(status.avatarUrl || '')}"
               alt=""
@@ -1197,10 +1267,10 @@ function renderCards() {
                 </h3>
               </div>
 
-              <span class="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full ${
+              <span class="shrink-0 text-[11px] font-semibold ${
                 isLive
-                  ? 'bg-red-50 text-red-600 border border-red-100'
-                  : 'bg-slate-100/70 text-slate-500 border border-slate-200/70'
+                  ? 'live-status'
+                  : 'bg-slate-100/70 text-slate-500 border border-slate-200/70 px-2 py-1 rounded-full'
               }">
                 ${isLive ? 'LIVE' : '離線'}
               </span>
@@ -1211,8 +1281,8 @@ function renderCards() {
             </div>
 
             ${isLive ? `
-              <div class="mt-3 flex items-center gap-2 text-sm font-medium text-slate-600">
-                <span class="material-symbols-outlined text-[17px]">group</span>
+              <div class="mt-3 live-viewers text-sm">
+                <span class="material-symbols-outlined text-[17px]">visibility</span>
                 ${viewer.toLocaleString()} 人觀看
                 ${isTwitch && status.gameName ? ' · ' + escapeHtml(status.gameName) : ''}
               </div>
@@ -1617,16 +1687,14 @@ function selectStreamer(id) {
 
   if (status.isLive) {
     detailStatus.innerHTML = `
-      <div class="detail-live-panel rounded-2xl p-4">
-        <div class="detail-live-title font-bold">
-          <span class="detail-live-dot"></span>
-          正在直播
-        </div>
-        <div class="mt-2 text-sm text-slate-600">
-          ${Number(status.viewerCount || 0).toLocaleString()} 人觀看
+      <div class="live-detail-panel">
+        <div class="live-detail-title">正在直播</div>
+        <div class="mt-3 live-viewers">
+          <span class="material-symbols-outlined text-[17px]">group</span>
+          <span>${Number(status.viewerCount || 0).toLocaleString()} 人觀看</span>
         </div>
         ${status.title ? `
-          <div class="mt-1 text-sm text-slate-500">
+          <div class="mt-2 text-sm text-slate-500">
             ${escapeHtml(status.title)}
           </div>` : ''}
       </div>`;
@@ -2631,5 +2699,13 @@ function showToast(message, type = 'success') {
 }
 </script>
 
+<script type="module">
+import { animate, stagger, splitText } from 'https://cdn.jsdelivr.net/npm/animejs/+esm';
+const marquee = document.querySelector('#bgMarqueeText');
+if (marquee) {
+  const { chars } = splitText(marquee, { chars: { wrap: true } });
+  animate(chars, { y: ['75%', '0%'], duration: 750, ease: 'out(3)', delay: stagger(50), loop: true, alternate: true });
+}
+</script>
 </body>
 </html>
