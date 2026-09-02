@@ -291,19 +291,19 @@ body {
   overflow: hidden;
 }
 
-/* 右上角文字動畫：字元逐一上下浮動 */
+/* 右上角文字動畫：每個字獨立上下進出，向下時完全藏起來 */
 .bg-marquee-layer {
   position: fixed; top: 16px; right: 16px; z-index: 30;
   width: min(360px, calc(100vw - 32px)); height: 36px;
-  overflow: hidden; pointer-events: none; display: flex; align-items: center;
+  overflow: clip; pointer-events: none; display: flex; align-items: center;
   border-radius: 999px;
   background: rgba(239,246,255,.62);
   border: 1px solid rgba(147,197,253,.48);
   box-shadow: 0 5px 16px rgba(37,99,235,.08), inset 0 1px 0 rgba(255,255,255,.9);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-.bg-marquee-text { width:100%; margin:0; padding:0 14px; text-align:center; white-space:nowrap; overflow:hidden; font-size:12px; line-height:1; font-weight:700; color:rgba(37,99,235,.82); letter-spacing:.35px; }
-.bg-marquee-text .char-wrap { overflow:clip; display:inline-block; vertical-align:middle; }
+.bg-marquee-text { width:100%; margin:0; padding:0 14px; text-align:center; white-space:nowrap; overflow:visible; font-size:12px; line-height:1; font-weight:700; color:rgba(37,99,235,.82); letter-spacing:.35px; }
+.bg-marquee-text .char-wrap { display:inline-block; height:1.15em; overflow:clip; vertical-align:middle; }
 .bg-marquee-text .char { display:inline-block; will-change:transform; }
 #appMain {
   position: relative;
@@ -357,216 +357,6 @@ body.custom-cursor-active * {
 .dragging { opacity: .55 !important; }
 .drag-over { outline: 2px dashed #3b82f6; outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
-
-
-/* =========================================================
-   🌸 主播卡片：粉紅流動玻璃效果
-   ========================================================= */
-.streamer-card {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(255,182,213,.38), transparent 42%),
-    radial-gradient(circle at 100% 100%, rgba(244,114,182,.20), transparent 45%),
-    linear-gradient(135deg, rgba(255,255,255,.72), rgba(255,240,247,.48));
-  border: 1px solid rgba(255,255,255,.78);
-  box-shadow:
-    0 8px 24px rgba(236,72,153,.08),
-    inset 0 1px 0 rgba(255,255,255,.9);
-  transition: transform .35s cubic-bezier(.2,.8,.2,1),
-              box-shadow .35s ease,
-              border-color .35s ease,
-              background .35s ease;
-}
-
-.streamer-card::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  width: 180px;
-  height: 180px;
-  left: -70px;
-  top: -90px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,105,180,.42) 0%, rgba(255,105,180,.18) 38%, transparent 72%);
-  filter: blur(8px);
-  animation: pinkBlobMove 6s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.streamer-card::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  width: 170px;
-  height: 170px;
-  right: -70px;
-  bottom: -90px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(236,72,153,.32) 0%, rgba(244,114,182,.16) 40%, transparent 72%);
-  filter: blur(10px);
-  animation: pinkBlobMove2 7s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.streamer-card.is-live {
-  border-color: rgba(244,114,182,.58);
-  box-shadow:
-    0 10px 28px rgba(236,72,153,.16),
-    0 0 0 1px rgba(255,255,255,.5),
-    inset 0 1px 0 rgba(255,255,255,.9);
-}
-
-.streamer-card.is-live:hover {
-  transform: translateY(-6px) scale(1.015);
-  border-color: rgba(236,72,153,.78);
-  box-shadow:
-    0 18px 42px rgba(236,72,153,.22),
-    0 0 28px rgba(244,114,182,.16),
-    inset 0 1px 0 rgba(255,255,255,1);
-}
-
-.streamer-card:not(.is-live):hover {
-  transform: translateY(-4px);
-  box-shadow:
-    0 14px 32px rgba(236,72,153,.10),
-    inset 0 1px 0 rgba(255,255,255,.95);
-}
-
-.streamer-card.is-live.selected {
-  border-color: rgba(236,72,153,.82);
-  box-shadow:
-    0 0 0 2px rgba(244,114,182,.18),
-    0 16px 38px rgba(236,72,153,.20),
-    inset 0 1px 0 rgba(255,255,255,1);
-}
-
-.live-status {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  color: #db2777;
-  background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(252,231,243,.82));
-  border: 1px solid rgba(244,114,182,.32);
-  box-shadow: 0 3px 10px rgba(236,72,153,.10);
-}
-
-.live-status::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: #ec4899;
-  box-shadow: 0 0 0 0 rgba(236,72,153,.5);
-  animation: livePulse 1.6s infinite;
-}
-
-.live-viewers {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #be185d;
-  font-weight: 600;
-  background: linear-gradient(90deg, rgba(252,231,243,.65), rgba(255,255,255,.35));
-  border-radius: 10px;
-  padding: 5px 9px;
-}
-
-.live-enter-btn {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 11px 16px;
-  border-radius: 14px;
-  color: white;
-  font-weight: 700;
-  background: linear-gradient(120deg, #ec4899, #f472b6, #e879f9, #ec4899);
-  background-size: 250% 100%;
-  box-shadow:
-    0 8px 20px rgba(236,72,153,.22),
-    inset 0 1px 0 rgba(255,255,255,.35);
-  border: 1px solid rgba(255,255,255,.45);
-  transition: transform .25s ease, box-shadow .25s ease, background-position .5s ease;
-}
-
-.live-enter-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.38) 45%, transparent 70%);
-  transform: translateX(-120%);
-  transition: transform .65s ease;
-  pointer-events: none;
-}
-
-.live-enter-btn:hover {
-  transform: translateY(-2px);
-  background-position: 100% 50%;
-  box-shadow:
-    0 12px 28px rgba(236,72,153,.32),
-    0 0 18px rgba(244,114,182,.22);
-}
-
-.live-enter-btn:hover::before { transform: translateX(120%); }
-.live-enter-btn:active { transform: translateY(0) scale(.98); }
-
-.streamer-card .streamer-avatar {
-  transition: box-shadow .35s ease, transform .35s ease;
-}
-
-.streamer-card.is-live .streamer-avatar {
-  box-shadow:
-    0 0 0 2px rgba(255,255,255,.85),
-    0 0 0 4px rgba(244,114,182,.30),
-    0 6px 18px rgba(236,72,153,.18);
-}
-
-.streamer-card.is-live:hover .streamer-avatar {
-  transform: scale(1.04);
-  box-shadow:
-    0 0 0 2px rgba(255,255,255,.95),
-    0 0 0 5px rgba(244,114,182,.38),
-    0 8px 22px rgba(236,72,153,.24);
-}
-
-@keyframes livePulse {
-  0% { box-shadow: 0 0 0 0 rgba(236,72,153,.55); }
-  70% { box-shadow: 0 0 0 7px rgba(236,72,153,0); }
-  100% { box-shadow: 0 0 0 0 rgba(236,72,153,0); }
-}
-
-@keyframes pinkBlobMove {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(55px, 35px) scale(1.18); }
-}
-
-@keyframes pinkBlobMove2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-45px, -35px) scale(1.15); }
-}
-
-@media (max-width: 640px) {
-  .streamer-card.is-live:hover { transform: translateY(-3px) scale(1.005); }
-  .live-enter-btn { padding: 10px 14px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .streamer-card::before,
-  .streamer-card::after,
-  .live-status::before { animation: none; }
-  .streamer-card,
-  .live-enter-btn { transition: none; }
-}
 
 
 /* 直播詳細欄位：淡藍／冰藍玻璃 */
@@ -1243,7 +1033,7 @@ function renderCards() {
 
     return `
       <article
-        class="glass-card streamer-card ${isLive ? 'is-live' : ''} rounded-2xl p-5 cursor-pointer opacity-0 animate-fade-in-up ${selected ? 'selected' : ''}"
+        class="glass-card rounded-2xl p-5 cursor-pointer opacity-0 animate-fade-in-up ${selected ? 'selected' : ''}"
         style="animation-delay:${index * 45}ms"
         id="card-${escapeAttr(item.cardKey)}"
         onclick="selectStreamer('${escapeAttr(item.cardKey)}')">
@@ -2704,7 +2494,16 @@ import { animate, stagger, splitText } from 'https://cdn.jsdelivr.net/npm/animej
 const marquee = document.querySelector('#bgMarqueeText');
 if (marquee) {
   const { chars } = splitText(marquee, { chars: { wrap: true } });
-  animate(chars, { y: ['75%', '0%'], duration: 750, ease: 'out(3)', delay: stagger(50), loop: true, alternate: true });
+  animate(chars, {
+    y: [
+      { value: '115%', duration: 450, ease: 'in(3)' },
+      { value: '0%', duration: 750, ease: 'out(3)' },
+      { value: '0%', duration: 1900, ease: 'linear' },
+      { value: '115%', duration: 500, ease: 'in(3)' }
+    ],
+    delay: stagger(50),
+    loop: true
+  });
 }
 </script>
 </body>
