@@ -1097,19 +1097,21 @@ function renderCards() {
 }
 
 /*
- * Bobble Hover：滑鼠移到卡片上時，依游標在卡片內的相對位置
- * 做輕微 3D 傾斜（Motion 官方網格範例那種手感），滑開時用
- * 帶回彈感的 easing 彈回原位。純 CSS transform + JS 計算角度，
- * 不需要額外載入 Framer Motion。只在滑鼠裝置上啟用，
- * 觸控裝置沒有「移動中的游標位置」這個概念，跳過不套用。
+ * Bobble Hover：依游標／手指在卡片內的相對位置做輕微 3D 傾斜
+ * （Motion 官方網格範例那種手感），放開／移開時用帶回彈感的
+ * easing 彈回原位。純 CSS transform + JS 計算角度，不需要
+ * 額外載入 Framer Motion。
+ *
+ * 用 Pointer Events（不是 mousemove）統一處理滑鼠與觸控：
+ *   - 滑鼠：單純移過去（pointermove）就會觸發，不用按著。
+ *   - 觸控／觸控筆：沒有「懸停」這個狀態，手指壓著拖動時
+ *     （pointerdown + pointermove）才會觸發，放開或滑出卡片
+ *     範圍會彈回原位。
+ *
  * 只作用在 #cardList 裡的卡片，不影響其他頁面用到
  * .glass-card 的地方（例如 IG 通知卡片）。
  */
 function setupCardBobbleHover() {
-  if (!window.matchMedia || !window.matchMedia('(pointer: fine)').matches) {
-    return;
-  }
-
   const MAX_TILT_DEG = 9;
   const HOVER_SCALE = 1.03;
   const MOVE_TRANSITION =
@@ -1117,24 +1119,36 @@ function setupCardBobbleHover() {
   const LEAVE_TRANSITION =
     'transform .6s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease, background .25s ease, border-color .25s ease';
 
+  function applyTilt(card, clientX, clientY) {
+    const rect = card.getBoundingClientRect();
+    const px = (clientX - rect.left) / rect.width - 0.5;
+    const py = (clientY - rect.top) / rect.height - 0.5;
+
+    const rotateY = px * MAX_TILT_DEG * 2;
+    const rotateX = -py * MAX_TILT_DEG * 2;
+
+    card.style.transition = MOVE_TRANSITION;
+    card.style.transform =
+      `perspective(800px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) scale(${HOVER_SCALE}) translateY(-4px)`;
+  }
+
+  function resetTilt(card) {
+    card.style.transition = LEAVE_TRANSITION;
+    card.style.transform = '';
+  }
+
   document.querySelectorAll('#cardList .glass-card').forEach(card => {
-    card.addEventListener('mousemove', (event) => {
-      const rect = card.getBoundingClientRect();
-      const px = (event.clientX - rect.left) / rect.width - 0.5;
-      const py = (event.clientY - rect.top) / rect.height - 0.5;
-
-      const rotateY = px * MAX_TILT_DEG * 2;
-      const rotateX = -py * MAX_TILT_DEG * 2;
-
-      card.style.transition = MOVE_TRANSITION;
-      card.style.transform =
-        `perspective(800px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) scale(${HOVER_SCALE}) translateY(-4px)`;
+    card.addEventListener('pointermove', (event) => {
+      applyTilt(card, event.clientX, event.clientY);
     });
 
-    card.addEventListener('mouseleave', () => {
-      card.style.transition = LEAVE_TRANSITION;
-      card.style.transform = '';
+    card.addEventListener('pointerdown', (event) => {
+      applyTilt(card, event.clientX, event.clientY);
     });
+
+    card.addEventListener('pointerleave', () => resetTilt(card));
+    card.addEventListener('pointerup', () => resetTilt(card));
+    card.addEventListener('pointercancel', () => resetTilt(card));
   });
 }
 
